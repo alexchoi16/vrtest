@@ -2,45 +2,59 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vision Simulator VR - Sound Enhanced</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bright Morning WebXR Vision Simulator</title>
+  <!-- Load A-Frame core framework -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <!-- Load A-Frame Environment Component -->
   <script src="https://unpkg.com/aframe-environment-component@1.3.1/dist/aframe-environment-component.min.js"></script>
-  
+
   <style>
+    /* Desktop / Browser Controls UI Overlay */
     #ui-controls {
       position: absolute;
       top: 12px;
       left: 12px;
       z-index: 9999;
-      background: rgba(255, 255, 255, 0.92);
-      padding: 12px 16px;
-      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 14px 18px;
+      border-radius: 12px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #111;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-      border: 1px solid rgba(0,0,0,0.1);
-      max-width: 280px;
+      color: #1E293B;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      max-width: 300px;
     }
     #ui-controls h3 {
       margin: 0 0 6px 0;
-      font-size: 15px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
       color: #2563EB;
     }
     #ui-controls select {
       width: 100%;
-      padding: 6px 8px;
-      border-radius: 6px;
-      border: 1px solid #CCC;
-      background: #FFF;
-      color: #111;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #CBD5E1;
+      background: #F8FAFC;
+      color: #0F172A;
       font-size: 13px;
+      font-weight: 500;
       cursor: pointer;
       outline: none;
+      transition: all 0.2s ease;
+    }
+    #ui-controls select:hover {
+      border-color: #3B82F6;
+      background: #FFFFFF;
     }
     #ui-controls p {
-      margin: 6px 0 0 0;
+      margin: 8px 0 0 0;
       font-size: 11px;
-      color: #555;
+      color: #64748B;
+      line-height: 1.4;
     }
   </style>
 
@@ -75,6 +89,7 @@
         ctx.clearRect(0, 0, 1024, 1024);
 
         if (mode === 'amd') {
+          // 2/12 Macular Degeneration (AMD): Central scotoma
           const grad = ctx.createRadialGradient(512, 512, 10, 512, 512, 300);
           grad.addColorStop(0, 'rgba(10, 10, 10, 0.99)');
           grad.addColorStop(0.7, 'rgba(30, 30, 30, 0.9)');
@@ -84,6 +99,7 @@
           ctx.arc(512, 512, 300, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'glaucoma') {
+          // 3/12 Glaucoma: Peripheral field loss / Tunnel vision
           ctx.fillStyle = 'rgba(0,0,0,0.98)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -96,6 +112,7 @@
           ctx.fill();
           ctx.globalCompositeOperation = 'source-over';
         } else if (mode === 'diabetic') {
+          // 4/12 Diabetic Retinopathy: Floating scotomas & hemorrhages
           ctx.fillStyle = 'rgba(15, 15, 15, 0.9)';
           const spots = [[300, 250, 70], [640, 360, 90], [400, 680, 100], [760, 640, 60], [512, 100, 50], [900, 900, 80]];
           spots.forEach(([x, y, r]) => {
@@ -104,9 +121,11 @@
             ctx.fill();
           });
         } else if (mode === 'cataract') {
-          ctx.fillStyle = 'rgba(190, 150, 80, 0.4)';
+          // 5/12 Cataracts: Blurry yellow/warm clouding wash
+          ctx.fillStyle = 'rgba(210, 175, 100, 0.42)';
           ctx.fillRect(0, 0, 1024, 1024);
         } else if (mode === 'keratoconus') {
+          // 6/12 Keratoconus: Asymmetric flare & ghosting streak
           ctx.fillStyle = 'rgba(230, 240, 255, 0.35)';
           const spots = [[512, 560, 250], [460, 512, 180], [560, 512, 180]];
           spots.forEach(([x, y, r]) => {
@@ -115,11 +134,13 @@
             ctx.fill();
           });
         } else if (mode === 'opacity') {
+          // 7/12 Corneal Opacity / Scarring: Focal dense clouding
           ctx.fillStyle = 'rgba(250, 250, 250, 0.92)';
           ctx.beginPath();
           ctx.ellipse(350, 450, 200, 300, Math.PI / 4, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'fuchs') {
+          // 8/12 Fuchs' Dystrophy: Corneal edema & haze
           ctx.fillStyle = 'rgba(240, 245, 255, 0.45)';
           ctx.fillRect(0, 0, 1024, 1024);
           const grad = ctx.createRadialGradient(512, 512, 80, 512, 512, 450);
@@ -130,6 +151,7 @@
           ctx.arc(512, 512, 450, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'rp') {
+          // 9/12 Retinitis Pigmentosa: Severe tunnel vision
           ctx.fillStyle = 'rgba(5, 5, 5, 0.99)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -142,6 +164,7 @@
           ctx.fill();
           ctx.globalCompositeOperation = 'source-over';
         } else if (mode === 'cscr') {
+          // 10/12 Central Serous Chorioretinopathy: Serous blister spot
           const grad = ctx.createRadialGradient(512, 512, 20, 512, 512, 180);
           grad.addColorStop(0, 'rgba(100, 110, 120, 0.7)');
           grad.addColorStop(0.8, 'rgba(160, 170, 180, 0.35)');
@@ -151,6 +174,7 @@
           ctx.arc(512, 512, 180, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'uveitis') {
+          // 11/12 Anterior Uveitis: Flare & inflammatory cells
           ctx.fillStyle = 'rgba(255, 250, 230, 0.32)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.fillStyle = 'rgba(180, 170, 150, 0.6)';
@@ -161,6 +185,7 @@
             ctx.fill();
           });
         } else if (mode === 'dryeye') {
+          // 12/12 Severe Dry Eye: Tear film disruption streaks
           ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.fillStyle = 'rgba(220, 225, 235, 0.4)';
@@ -201,6 +226,7 @@
         this.nextMode = this.nextMode.bind(this);
         this.setMode = this.setMode.bind(this);
 
+        // Bind Quest Touch Controller button triggers
         this.el.addEventListener('triggerdown', this.nextMode);
         this.el.addEventListener('abuttondown', this.nextMode);
         this.el.addEventListener('xbuttondown', this.nextMode);
@@ -235,7 +261,7 @@
         const text = document.querySelector('#hud-text');
         const clickSound = document.querySelector('#click-sound-entity');
 
-        // Play UI Click Sound
+        // Play UI Click Feedback Sound
         if (clickSound && clickSound.components.sound) {
           clickSound.components.sound.stopSound();
           clickSound.components.sound.playSound();
@@ -247,6 +273,20 @@
         if (text) {
           text.setAttribute('value', `Condition: ${this.labels[selected]}\n(Press Trigger or A/X to Next)`);
         }
+      }
+    });
+
+    AFRAME.registerComponent('flapping-wings', {
+      init: function () {
+        this.leftWing = this.el.querySelector('.wing-left');
+        this.rightWing = this.el.querySelector('.wing-right');
+        this.time = 0;
+      },
+      tick: function (time, timeDelta) {
+        this.time += timeDelta * 0.012;
+        const angle = Math.sin(this.time) * 35;
+        if (this.leftWing) this.leftWing.setAttribute('rotation', `0 0 ${70 + angle}`);
+        if (this.rightWing) this.rightWing.setAttribute('rotation', `0 0 ${-70 - angle}`);
       }
     });
   </script>
@@ -272,72 +312,114 @@
     <p>Press <b>Trigger</b> or <b>A/X</b> in Quest VR to cycle conditions.</p>
   </div>
 
-  <a-scene>
-    <!-- Asset Management System for Sounds -->
+  <a-scene fog="type: exponential; color: #E0F6FF; density: 0.005">
+    <!-- Sound Asset Definitions -->
     <a-assets>
-      <!-- Click Sound for UI -->
       <audio id="click-sound" src="https://cdn.aframe.io/360-image-gallery-boilerplate/audio/click.ogg" crossorigin="anonymous"></audio>
-      <!-- Car Engine Sound -->
       <audio id="engine-sound" src="https://cdn.freesound.org/previews/387/387602_5121236-lq.mp3" crossorigin="anonymous"></audio>
-      <!-- Park Ambient Birds Sound -->
       <audio id="ambient-sound" src="https://cdn.freesound.org/previews/416/416529_5121236-lq.mp3" crossorigin="anonymous"></audio>
     </a-assets>
 
-    <!-- Global Ambient Sound (Birds & Breeze) -->
-    <a-entity sound="src: #ambient-sound; autoplay: true; loop: true; volume: 0.3"></a-entity>
+    <!-- Global Ambient Park Birds Audio -->
+    <a-entity sound="src: #ambient-sound; autoplay: true; loop: true; volume: 0.25"></a-entity>
 
-    <!-- Sound UI Feedback Entity -->
+    <!-- UI Click Feedback Sound Entity -->
     <a-entity id="click-sound-entity" sound="src: #click-sound; autoplay: false; volume: 0.8"></a-entity>
 
-    <!-- Morning Park Environment -->
-    <a-entity environment="preset: forest; skyType: atmosphere; skyColor: #87CEEB; horizonColor: #E0F6FF; lightPosition: 0 1 0.5; dressingAmount: 50; playArea: 1.5; fog: 0.15"></a-entity>
+    <!-- Bright Morning Atmosphere & Sunlight Environment -->
+    <a-entity environment="preset: forest; skyType: atmosphere; skyColor: #87CEEB; horizonColor: #E0F6FF; lightPosition: 0.5 1 -0.5; lighting: morning; dressing: trees; dressingAmount: 45; dressingColor: #2D6A4F; groundColor: #4A7C59; groundColor2: #386641; shadow: true"></a-entity>
 
-    <!-- Paved Road & Lines -->
-    <a-plane position="0 0.01 -10" rotation="-90 0 0" width="100" height="8" color="#2B2B2B"></a-plane>
-    <a-plane position="0 0.02 -10" rotation="-90 0 0" width="100" height="0.2" color="#FFD700"></a-plane>
+    <!-- Bright White/Pale Yellow Morning Sun Key Light -->
+    <a-light type="directional" position="10 20 -10" intensity="1.4" color="#FFFDF0" castShadow="true"></a-light>
+    <!-- Soft Crisp Ambient Morning Light -->
+    <a-light type="ambient" color="#D0E8FF" intensity="0.75"></a-light>
 
-    <!-- Car 1 with Positional 3D Sound -->
-    <a-entity id="car1" position="30 0.6 -8.5"
-              animation="property: position; to: -30 0.6 -8.5; loop: true; dur: 6000; easing: linear"
-              sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.6; positional: true; distanceModel: linear; maxDistance: 40">
-      <a-box width="3.5" height="1" depth="1.8" color="#C0392B"></a-box>
-      <a-box position="0 0.7 0" width="1.8" height="0.7" depth="1.6" color="#111111"></a-box>
-      <a-sphere position="-1.7 0.1 0.5" radius="0.15" color="#FFFDD0"></a-sphere>
-      <a-sphere position="-1.7 0.1 -0.5" radius="0.15" color="#FFFDD0"></a-sphere>
+    <!-- Paved Park Pedestrian Pathway -->
+    <a-plane position="0 0.01 -8" rotation="-90 0 0" width="40" height="20" color="#64748B" material="roughness: 0.7"></a-plane>
+
+    <!-- Two-Lane Asphalt Road -->
+    <a-plane position="0 0.02 -10" rotation="-90 0 0" width="120" height="7" color="#334155"></a-plane>
+    <!-- Yellow Center Line -->
+    <a-plane position="0 0.03 -10" rotation="-90 0 0" width="120" height="0.25" color="#FACC15"></a-plane>
+
+    <!-- Park Benches along the Pathway -->
+    <a-entity position="-3.5 0 -5" rotation="0 18 0">
+      <a-box position="0 0.4 0" width="1.8" height="0.08" depth="0.5" color="#A16207"></a-box>
+      <a-box position="0 0.7 -0.2" width="1.8" height="0.5" depth="0.06" color="#A16207"></a-box>
+      <a-cylinder position="-0.8 0.2 0.2" radius="0.04" height="0.4" color="#1E293B"></a-cylinder>
+      <a-cylinder position="0.8 0.2 0.2" radius="0.04" height="0.4" color="#1E293B"></a-cylinder>
+      <a-cylinder position="-0.8 0.2 -0.2" radius="0.04" height="0.4" color="#1E293B"></a-cylinder>
+      <a-cylinder position="0.8 0.2 -0.2" radius="0.04" height="0.4" color="#1E293B"></a-cylinder>
     </a-entity>
 
-    <!-- Car 2 with Positional 3D Sound -->
-    <a-entity id="car2" position="-30 0.6 -11.5"
-              animation="property: position; to: 30 0.6 -11.5; loop: true; dur: 8000; easing: linear"
+    <a-entity position="3.5 0 -5.5" rotation="0 -22 0">
+      <a-box position="0 0.4 0" width="1.8" height="0.08" depth="0.5" color="#A16207"></a-box>
+      <a-box position="0 0.7 -0.2" width="1.8" height="0.5" depth="0.06" color="#A16207"></a-box>
+      <a-cylinder position="-0.8 0.2 0.2" radius="0.04" height="0.4" color="#1E293B"></a-cylinder>
+      <a-cylinder position="0.8 0.2 0.2" radius="0.04" height="0.4" color="#1E293B"></a-cylinder>
+      <a-cylinder position="-0.8 0.2 -0.2" radius="0.04" height="0.4" color="#1E293B"></a-cylinder>
+      <a-cylinder position="0.8 0.2 -0.2" radius="0.04" height="0.4" color="#1E293B"></a-cylinder>
+    </a-entity>
+
+    <!-- Red Sports Car driving Westbound with Spatial Engine Audio -->
+    <a-entity position="40 0.6 -8.5"
+              animation="property: position; to: -40 0.6 -8.5; loop: true; dur: 6500; easing: linear"
               sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.5; positional: true; distanceModel: linear; maxDistance: 40">
-      <a-box width="3.8" height="1.1" depth="1.8" color="#2980B9"></a-box>
-      <a-box position="0 0.7 0" width="2.0" height="0.7" depth="1.6" color="#222222"></a-box>
-      <a-sphere position="1.9 0.1 0.5" radius="0.15" color="#FFFDD0"></a-sphere>
-      <a-sphere position="1.9 0.1 -0.5" radius="0.15" color="#FFFDD0"></a-sphere>
+      <a-box width="3.8" height="0.9" depth="1.9" color="#EF4444"></a-box>
+      <a-box position="-0.2 0.6 0" width="2.0" height="0.6" depth="1.7" color="#0F172A"></a-box>
+      <a-cylinder position="-1.2 -0.25 0.95" rotation="90 0 0" radius="0.32" height="0.2" color="#111"></a-cylinder>
+      <a-cylinder position="1.2 -0.25 0.95" rotation="90 0 0" radius="0.32" height="0.2" color="#111"></a-cylinder>
+      <a-cylinder position="-1.2 -0.25 -0.95" rotation="90 0 0" radius="0.32" height="0.2" color="#111"></a-cylinder>
+      <a-cylinder position="1.2 -0.25 -0.95" rotation="90 0 0" radius="0.32" height="0.2" color="#111"></a-cylinder>
+      <a-sphere position="-1.9 0.1 0.6" radius="0.12" color="#FFFFFF" material="emissive: #FFFFFF; emissiveIntensity: 1.5"></a-sphere>
+      <a-sphere position="-1.9 0.1 -0.6" radius="0.12" color="#FFFFFF" material="emissive: #FFFFFF; emissiveIntensity: 1.5"></a-sphere>
     </a-entity>
 
-    <!-- Birds Overhead -->
-    <a-entity position="0 12 -12" animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
-      <a-entity position="6 0 0">
-        <a-cone position="-0.3 0 0" rotation="0 0 70" radius-bottom="0.05" radius-top="0.01" height="0.8" color="#111"></a-cone>
-        <a-cone position="0.3 0 0" rotation="0 0 -70" radius-bottom="0.05" radius-top="0.01" height="0.8" color="#111"></a-cone>
+    <!-- Blue SUV driving Eastbound with Spatial Engine Audio -->
+    <a-entity position="-40 0.7 -11.5"
+              animation="property: position; to: 40 0.7 -11.5; loop: true; dur: 8500; easing: linear"
+              sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.45; positional: true; distanceModel: linear; maxDistance: 40">
+      <a-box width="4.2" height="1.2" depth="2.0" color="#3B82F6"></a-box>
+      <a-box position="0 0.8 0" width="2.4" height="0.75" depth="1.8" color="#1E293B"></a-box>
+      <a-cylinder position="-1.3 -0.35 1.0" rotation="90 0 0" radius="0.35" height="0.22" color="#111"></a-cylinder>
+      <a-cylinder position="1.3 -0.35 1.0" rotation="90 0 0" radius="0.35" height="0.22" color="#111"></a-cylinder>
+      <a-cylinder position="-1.3 -0.35 -1.0" rotation="90 0 0" radius="0.35" height="0.22" color="#111"></a-cylinder>
+      <a-cylinder position="1.3 -0.35 -1.0" rotation="90 0 0" radius="0.35" height="0.22" color="#111"></a-cylinder>
+      <a-sphere position="2.1 0.1 0.6" radius="0.14" color="#FFFFFF" material="emissive: #FFFFFF; emissiveIntensity: 1.5"></a-sphere>
+      <a-sphere position="2.1 0.1 -0.6" radius="0.14" color="#FFFFFF" material="emissive: #FFFFFF; emissiveIntensity: 1.5"></a-sphere>
+    </a-entity>
+
+    <!-- Animated Flock of Birds soaring overhead against morning sky -->
+    <a-entity position="0 14 -12" animation="property: rotation; to: 0 360 0; loop: true; dur: 11000; easing: linear">
+      <a-entity position="6 0 0" flapping-wings>
+        <a-cone class="wing-left" position="-0.3 0 0" rotation="0 0 70" radius-bottom="0.04" radius-top="0.01" height="0.7" color="#1E293B"></a-cone>
+        <a-cone class="wing-right" position="0.3 0 0" rotation="0 0 -70" radius-bottom="0.04" radius-top="0.01" height="0.7" color="#1E293B"></a-cone>
+      </a-entity>
+      <a-entity position="8.5 1.2 2" flapping-wings>
+        <a-cone class="wing-left" position="-0.3 0 0" rotation="0 0 70" radius-bottom="0.04" radius-top="0.01" height="0.6" color="#1E293B"></a-cone>
+        <a-cone class="wing-right" position="0.3 0 0" rotation="0 0 -70" radius-bottom="0.04" radius-top="0.01" height="0.6" color="#1E293B"></a-cone>
+      </a-entity>
+      <a-entity position="4.5 -1 -2" flapping-wings>
+        <a-cone class="wing-left" position="-0.3 0 0" rotation="0 0 70" radius-bottom="0.04" radius-top="0.01" height="0.6" color="#1E293B"></a-cone>
+        <a-cone class="wing-right" position="0.3 0 0" rotation="0 0 -70" radius-bottom="0.04" radius-top="0.01" height="0.6" color="#1E293B"></a-cone>
       </a-entity>
     </a-entity>
 
-    <!-- Camera Rig -->
     <a-entity id="rig" position="0 1.6 0">
       <a-camera look-controls>
-        <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
+        <!-- Vision Condition Canvas Filter Overlay Plane -->
+         <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
         
-        <!-- White Semi-Transparent HUD Panel -->
+        <!-- White Semi-Transparent HUD Panel with Dark High-Contrast Text at z = -1.8 -->
         <a-entity id="hud-panel" position="0 -0.65 -1.8">
-          <a-plane color="#FFFFFF" opacity="0.8" width="1.6" height="0.35" position="0 0 -0.01"></a-plane>
-          <a-plane color="#2563EB" opacity="0.9" width="1.6" height="0.03" position="0 0.165 0"></a-plane>
+          <a-plane color="#FFFFFF" opacity="0.85" width="1.6" height="0.35" position="0 0 -0.01" material="roughness: 0.1"></a-plane>
+          <a-plane color="#2563EB" width="1.6" height="0.015" position="0 0.175 0"></a-plane>
           <a-text id="hud-text" value="Condition: 1/12 Normal Vision\n(Press Trigger or A/X to Next)" 
                   align="center" width="1.8" color="#111111"></a-text>
         </a-entity>
       </a-camera>
 
+      <!-- Oculus Touch Controllers Event Listeners -->
       <a-entity mode-switcher oculus-touch-controls="hand: right"></a-entity>
       <a-entity mode-switcher oculus-touch-controls="hand: left"></a-entity>
     </a-entity>
