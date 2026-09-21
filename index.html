@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vision Simulator VR - 12 Conditions</title>
-  <!-- Load A-Frame -->
+  <!-- Load A-Frame core framework -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- Load A-Frame Environment Component -->
+  <!-- Load A-Frame Environment Component for realistic outdoor backdrop -->
   <script src="https://unpkg.com/aframe-environment-component@1.3.1/dist/aframe-environment-component.min.js"></script>
   
   <script>
@@ -39,7 +40,7 @@
         ctx.clearRect(0, 0, 1024, 1024);
 
         if (mode === 'amd') {
-          // Central scotoma (Macular Degeneration)
+          // 2/12 Macular Degeneration (AMD): Central scotoma
           const grad = ctx.createRadialGradient(512, 512, 10, 512, 512, 300);
           grad.addColorStop(0, 'rgba(10, 10, 10, 0.99)');
           grad.addColorStop(0.7, 'rgba(30, 30, 30, 0.9)');
@@ -49,7 +50,7 @@
           ctx.arc(512, 512, 300, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'glaucoma') {
-          // Tunnel vision / Peripheral vision loss
+          // 3/12 Glaucoma: Peripheral field loss / tunnel vision
           ctx.fillStyle = 'rgba(0,0,0,0.98)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -62,7 +63,7 @@
           ctx.fill();
           ctx.globalCompositeOperation = 'source-over';
         } else if (mode === 'diabetic') {
-          // Floating scotomas / hemorrhages (Floaters)
+          // 4/12 Diabetic Retinopathy: Scattered floaters / hemorrhages
           ctx.fillStyle = 'rgba(15, 15, 15, 0.9)';
           const spots = [[300, 250, 70], [640, 360, 90], [400, 680, 100], [760, 640, 60], [512, 100, 50], [900, 900, 80]];
           spots.forEach(([x, y, r]) => {
@@ -71,11 +72,11 @@
             ctx.fill();
           });
         } else if (mode === 'cataract') {
-          // Blurry yellow/brown wash
+          // 5/12 Cataracts: Blurry yellow/brown wash & loss of contrast
           ctx.fillStyle = 'rgba(190, 150, 80, 0.4)';
           ctx.fillRect(0, 0, 1024, 1024);
         } else if (mode === 'keratoconus') {
-          // Irregular astigmatism & vertical flare streak
+          // 6/12 Keratoconus: Asymmetric flare, irregular distortion & streak
           ctx.fillStyle = 'rgba(230, 240, 255, 0.35)';
           const spots = [[512, 560, 250], [460, 512, 180], [560, 512, 180]];
           spots.forEach(([x, y, r]) => {
@@ -84,13 +85,13 @@
             ctx.fill();
           });
         } else if (mode === 'opacity') {
-          // Focal dense leucoma / corneal clouding
+          // 7/12 Corneal Opacity / Scarring: Focal dense stromal clouding
           ctx.fillStyle = 'rgba(250, 250, 250, 0.92)';
           ctx.beginPath();
           ctx.ellipse(350, 450, 200, 300, Math.PI / 4, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'fuchs') {
-          // Generalized corneal edema & morning fog
+          // 8/12 Fuchs' Dystrophy: Generalized corneal edema & diffuse haze
           ctx.fillStyle = 'rgba(240, 245, 255, 0.45)';
           ctx.fillRect(0, 0, 1024, 1024);
           const grad = ctx.createRadialGradient(512, 512, 80, 512, 512, 450);
@@ -101,7 +102,7 @@
           ctx.arc(512, 512, 450, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'rp') {
-          // Retinitis Pigmentosa: Severe peripheral field constriction with mid-peripheral ring
+          // 9/12 Retinitis Pigmentosa: Severe field constriction (tunnel vision)
           ctx.fillStyle = 'rgba(5, 5, 5, 0.99)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -114,7 +115,7 @@
           ctx.fill();
           ctx.globalCompositeOperation = 'source-over';
         } else if (mode === 'cscr') {
-          // Central Serous Chorioretinopathy: Transparent central grey/translucent blister (micropsia/metamorphopsia)
+          // 10/12 CSCR: Central serous fluid blister creating dark grey distortion bubble
           const grad = ctx.createRadialGradient(512, 512, 20, 512, 512, 180);
           grad.addColorStop(0, 'rgba(100, 110, 120, 0.7)');
           grad.addColorStop(0.8, 'rgba(160, 170, 180, 0.35)');
@@ -124,7 +125,7 @@
           ctx.arc(512, 512, 180, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'uveitis') {
-          // Anterior Uveitis: Photophobic glare wash with inflammatory floating cells
+          // 11/12 Anterior Uveitis: Inflammatory glare wash & visible anterior chamber cells
           ctx.fillStyle = 'rgba(255, 250, 230, 0.32)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.fillStyle = 'rgba(180, 170, 150, 0.6)';
@@ -135,7 +136,7 @@
             ctx.fill();
           });
         } else if (mode === 'dryeye') {
-          // Severe Dry Eye / Keratitis: Irregular tear film distortion patches
+          // 12/12 Severe Dry Eye / Superficial Keratitis: Tear film instability patches
           ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.fillStyle = 'rgba(220, 225, 235, 0.4)';
@@ -151,7 +152,6 @@
       }
     });
 
-    // Controller & Input Switcher
     AFRAME.registerComponent('mode-switcher', {
       init: function () {
         this.modes = [
@@ -218,18 +218,20 @@
     <!-- Camera Rig -->
     <a-entity id="rig" position="0 1.6 0">
       <a-camera look-controls>
-        <!-- Vision Overlay Plane -->
+        <!-- Vision Overlay Plane: Attached close to view (z = -0.5) to cover field of view -->
         <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
         
-        <!-- HUD Text Panel -->
-        <a-entity id="hud-panel" position="0 -0.4 -0.9">
-          <a-plane color="black" opacity="0.6" width="1.8" height="0.4" position="0 0 -0.01"></a-plane>
+        <!-- HUD Text Panel: Moved further out (z = -1.8) and scaled appropriately for comfortable reading in VR -->
+        <a-entity id="hud-panel" position="0 -0.65 -1.8">
+          <!-- Dark background plate for sharp contrast -->
+          <a-plane color="black" opacity="0.65" width="3.2" height="0.7" position="0 0 -0.01"></a-plane>
+          <!-- HUD Text element -->
           <a-text id="hud-text" value="Condition: 1/12 Normal Vision\n(Press Trigger or A/X to Next)" 
-                  align="center" width="2" color="#FFFFFF"></a-text>
+                  align="center" width="3.6" color="#FFFFFF"></a-text>
         </a-entity>
       </a-camera>
 
-      <!-- Input Listeners attached to Quest Controllers -->
+      <!-- Controller Event Binding for Quest 2 Touch Controllers -->
       <a-entity mode-switcher oculus-touch-controls="hand: right"></a-entity>
       <a-entity mode-switcher oculus-touch-controls="hand: left"></a-entity>
     </a-entity>
