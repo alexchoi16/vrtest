@@ -24,13 +24,10 @@
 
         this.ctx = ctx;
         this.texture = texture;
-        this.currentMode = 'normal';
-
         this.updateFilter('normal');
       },
 
       updateFilter: function (mode) {
-        this.currentMode = mode;
         const ctx = this.ctx;
         ctx.clearRect(0, 0, 512, 512);
 
@@ -70,40 +67,100 @@
           // Blurry yellow/brown wash
           ctx.fillStyle = 'rgba(180, 140, 60, 0.35)';
           ctx.fillRect(0, 0, 512, 512);
+        } else if (mode === 'keratoconus') {
+          // Irregular astigmatism & ghosting distortion (central conical glare mask)
+          const grad = ctx.createRadialGradient(256, 280, 5, 256, 280, 180);
+          grad.addColorStop(0, 'rgba(255, 255, 255, 0.65)');
+          grad.addColorStop(0.5, 'rgba(200, 220, 255, 0.25)');
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.ellipse(256, 280, 140, 200, Math.PI / 6, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (mode === 'opacity') {
+          // Focal dense leucoma / clouding across central cornea
+          const grad = ctx.createRadialGradient(220, 200, 20, 240, 220, 110);
+          grad.addColorStop(0, 'rgba(240, 240, 240, 0.88)');
+          grad.addColorStop(0.6, 'rgba(220, 220, 220, 0.5)');
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(240, 220, 110, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (mode === 'fuchs') {
+          // Widespread corneal edema (diffuse haziness & glare/halo effect)
+          ctx.fillStyle = 'rgba(230, 235, 245, 0.38)';
+          ctx.fillRect(0, 0, 512, 512);
+          
+          const grad = ctx.createRadialGradient(256, 256, 30, 256, 256, 200);
+          grad.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(256, 256, 200, 0, Math.PI * 2);
+          ctx.fill();
         }
 
         this.texture.needsUpdate = true;
       }
     });
 
-    // Cycle through modes when trigger/click is pressed
+    // Controller & Input Switcher
     AFRAME.registerComponent('mode-switcher', {
       init: function () {
-        const modes = ['normal', 'amd', 'glaucoma', 'diabetic', 'cataract'];
-        let index = 0;
+        this.modes = [
+          'normal', 
+          'amd', 
+          'glaucoma', 
+          'diabetic', 
+          'cataract', 
+          'keratoconus', 
+          'opacity', 
+          'fuchs'
+        ];
+        this.index = 0;
+        this.labels = {
+          'normal': 'Normal Vision',
+          'amd': 'Macular Degeneration (AMD)',
+          'glaucoma': 'Glaucoma (Tunnel Vision)',
+          'diabetic': 'Diabetic Retinopathy',
+          'cataract': 'Cataracts (Clouded / Tinted)',
+          'keratoconus': 'Keratoconus (Distortion & Glare)',
+          'opacity': 'Corneal Opacity / Scarring',
+          'fuchs': "Fuchs' Dystrophy (Corneal Edema / Fog)"
+        };
+
+        this.nextMode = this.nextMode.bind(this);
+
+        // Listen to window screen clicks (non-VR)
+        window.addEventListener('click', this.nextMode);
+
+        // Listen to controller trigger presses (VR Mode)
+        this.el.addEventListener('triggerdown', this.nextMode);
+        this.el.addEventListener('select', this.nextMode);
+        this.el.addEventListener('abuttondown', this.nextMode);
+        this.el.addEventListener('xbuttondown', this.nextMode);
+      },
+
+      nextMode: function () {
+        this.index = (this.index + 1) % this.modes.length;
+        const selected = this.modes[this.index];
+        
         const overlay = document.querySelector('#overlay');
         const text = document.querySelector('#hud-text');
 
-        this.el.addEventListener('click', () => {
-          index = (index + 1) % modes.length;
-          const selected = modes[index];
+        if (overlay && overlay.components['vision-overlay']) {
           overlay.components['vision-overlay'].updateFilter(selected);
-          
-          const labels = {
-            'normal': 'Normal Vision',
-            'amd': 'Macular Degeneration (AMD)',
-            'glaucoma': 'Glaucoma (Tunnel Vision)',
-            'diabetic': 'Diabetic Retinopathy',
-            'cataract': 'Cataracts (Clouded / Tinted)'
-          };
-          text.setAttribute('value', `Condition: ${labels[selected]}\n(Click trigger to switch)`);
-        });
+        }
+        if (text) {
+          text.setAttribute('value', `Condition: ${this.labels[selected]}\n(Press Trigger or A/X Button)`);
+        }
       }
     });
   </script>
 </head>
 <body>
-  <a-scene mode-switcher>
+  <a-scene>
     <!-- Environment / 360 Room -->
     <a-sky color="#ECEQE8"></a-sky>
     
@@ -120,13 +177,13 @@
         <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="1" height="1"></a-plane>
         
         <!-- Interactive Mode Text -->
-        <a-text id="hud-text" value="Condition: Normal Vision\n(Click trigger to switch)" 
+        <a-text id="hud-text" value="Condition: Normal Vision\n(Press Trigger or A/X Button)" 
                 position="0 -0.3 -0.8" align="center" width="1.5" color="#FFFFFF"></a-text>
       </a-camera>
 
-      <!-- Quest Controllers -->
-      <a-entity oculus-touch-controls="hand: right"></a-entity>
-      <a-entity oculus-touch-controls="hand: left"></a-entity>
+      <!-- Quest Controllers with Mode Switcher attached -->
+      <a-entity mode-switcher oculus-touch-controls="hand: right"></a-entity>
+      <a-entity mode-switcher oculus-touch-controls="hand: left"></a-entity>
     </a-entity>
   </a-scene>
 </body>
