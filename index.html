@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vision Simulator VR - Outdoor Scene</title>
+  <title>Vision Simulator VR - 12 Conditions</title>
   <!-- Load A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- Load A-Frame Environment Component -->
@@ -13,7 +13,7 @@
       init: function () {
         const el = this.el;
         const canvas = document.createElement('canvas');
-        canvas.width = 1024; // Increased resolution for clarity
+        canvas.width = 1024;
         canvas.height = 1024;
         const ctx = canvas.getContext('2d');
 
@@ -22,25 +22,20 @@
           map: texture,
           transparent: true,
           depthTest: false,
-          depthWrite: false, // Prevent depth issues
-          opacity: 1 // Base opacity
+          depthWrite: false,
+          opacity: 1
         });
 
-        // Use a basic plane mesh and disable depth sorting issues
         el.getOrCreateObject3D('mesh').material = material;
         el.setAttribute('material', { shader: 'flat', depthTest: false });
 
         this.ctx = ctx;
         this.texture = texture;
-        this.currentMode = 'normal';
-
         this.updateFilter('normal');
       },
 
       updateFilter: function (mode) {
-        this.currentMode = mode;
         const ctx = this.ctx;
-        const el = this.el;
         ctx.clearRect(0, 0, 1024, 1024);
 
         if (mode === 'amd') {
@@ -80,8 +75,7 @@
           ctx.fillStyle = 'rgba(190, 150, 80, 0.4)';
           ctx.fillRect(0, 0, 1024, 1024);
         } else if (mode === 'keratoconus') {
-          // Irregular astigmatism, haloing, and ghosting
-          // Simulate with an offset transparent glare mask
+          // Irregular astigmatism & vertical flare streak
           ctx.fillStyle = 'rgba(230, 240, 255, 0.35)';
           const spots = [[512, 560, 250], [460, 512, 180], [560, 512, 180]];
           spots.forEach(([x, y, r]) => {
@@ -90,16 +84,15 @@
             ctx.fill();
           });
         } else if (mode === 'opacity') {
-          // Focal dense leucoma / corneal clouding across one eye/section
+          // Focal dense leucoma / corneal clouding
           ctx.fillStyle = 'rgba(250, 250, 250, 0.92)';
           ctx.beginPath();
           ctx.ellipse(350, 450, 200, 300, Math.PI / 4, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'fuchs') {
-          // Generalized corneal edema, causing diffuse morning fog and glare
-          ctx.fillStyle = 'rgba(240, 245, 255, 0.45)'; // Base diffuse haze
+          // Generalized corneal edema & morning fog
+          ctx.fillStyle = 'rgba(240, 245, 255, 0.45)';
           ctx.fillRect(0, 0, 1024, 1024);
-          // Add central glare halo
           const grad = ctx.createRadialGradient(512, 512, 80, 512, 512, 450);
           grad.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
           grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
@@ -107,6 +100,51 @@
           ctx.beginPath();
           ctx.arc(512, 512, 450, 0, Math.PI * 2);
           ctx.fill();
+        } else if (mode === 'rp') {
+          // Retinitis Pigmentosa: Severe peripheral field constriction with mid-peripheral ring
+          ctx.fillStyle = 'rgba(5, 5, 5, 0.99)';
+          ctx.fillRect(0, 0, 1024, 1024);
+          ctx.globalCompositeOperation = 'destination-out';
+          const grad = ctx.createRadialGradient(512, 512, 40, 512, 512, 160);
+          grad.addColorStop(0, 'rgba(0,0,0,1)');
+          grad.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(512, 512, 160, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
+        } else if (mode === 'cscr') {
+          // Central Serous Chorioretinopathy: Transparent central grey/translucent blister (micropsia/metamorphopsia)
+          const grad = ctx.createRadialGradient(512, 512, 20, 512, 512, 180);
+          grad.addColorStop(0, 'rgba(100, 110, 120, 0.7)');
+          grad.addColorStop(0.8, 'rgba(160, 170, 180, 0.35)');
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(512, 512, 180, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (mode === 'uveitis') {
+          // Anterior Uveitis: Photophobic glare wash with inflammatory floating cells
+          ctx.fillStyle = 'rgba(255, 250, 230, 0.32)';
+          ctx.fillRect(0, 0, 1024, 1024);
+          ctx.fillStyle = 'rgba(180, 170, 150, 0.6)';
+          const cells = [[480, 490, 12], [530, 520, 8], [500, 460, 15], [450, 530, 10], [550, 470, 9]];
+          cells.forEach(([x, y, r]) => {
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        } else if (mode === 'dryeye') {
+          // Severe Dry Eye / Keratitis: Irregular tear film distortion patches
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+          ctx.fillRect(0, 0, 1024, 1024);
+          ctx.fillStyle = 'rgba(220, 225, 235, 0.4)';
+          const streaks = [[200, 300, 400, 80], [100, 600, 500, 60], [300, 150, 350, 70]];
+          streaks.forEach(([x, y, w, h]) => {
+            ctx.beginPath();
+            ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, Math.PI / 12, 0, Math.PI * 2);
+            ctx.fill();
+          });
         }
 
         this.texture.needsUpdate = true;
@@ -124,26 +162,31 @@
           'cataract', 
           'keratoconus', 
           'opacity', 
-          'fuchs'
+          'fuchs',
+          'rp',
+          'cscr',
+          'uveitis',
+          'dryeye'
         ];
         this.index = 0;
         this.labels = {
-          'normal': 'Normal Vision',
-          'amd': 'Macular Degeneration (AMD)',
-          'glaucoma': 'Glaucoma (Tunnel Vision)',
-          'diabetic': 'Diabetic Retinopathy',
-          'cataract': 'Cataracts (Clouded / Tinted)',
-          'keratoconus': 'Keratoconus (Distortion & Glare)',
-          'opacity': 'Corneal Opacity / Scarring',
-          'fuchs': "Fuchs' Dystrophy (Corneal Edema)"
+          'normal': '1/12 Normal Vision',
+          'amd': '2/12 Macular Degeneration (AMD)',
+          'glaucoma': '3/12 Glaucoma (Peripheral Loss)',
+          'diabetic': '4/12 Diabetic Retinopathy (Scotomas)',
+          'cataract': '5/12 Cataracts (Clouded / Tinted)',
+          'keratoconus': '6/12 Keratoconus (Distortion & Flare)',
+          'opacity': '7/12 Corneal Opacity / Scarring',
+          'fuchs': "8/12 Fuchs' Dystrophy (Corneal Edema)",
+          'rp': '9/12 Retinitis Pigmentosa (Tunnel Vision)',
+          'cscr': '10/12 Central Serous Chorioretinopathy',
+          'uveitis': '11/12 Anterior Uveitis (Photophobia/Cells)',
+          'dryeye': '12/12 Severe Dry Eye / Superficial Keratitis'
         };
 
         this.nextMode = this.nextMode.bind(this);
 
-        // Listen to window clicks (non-VR)
         window.addEventListener('click', this.nextMode);
-
-        // Listen to controller events (VR Mode)
         this.el.addEventListener('triggerdown', this.nextMode);
         this.el.addEventListener('abuttondown', this.nextMode);
         this.el.addEventListener('xbuttondown', this.nextMode);
@@ -153,18 +196,15 @@
         this.index = (this.index + 1) % this.modes.length;
         const selected = this.modes[this.index];
         
-        // Find the overlay and text elements
         const overlay = document.querySelector('#overlay');
         const text = document.querySelector('#hud-text');
 
-        // Update the visual filter
         if (overlay && overlay.components['vision-overlay']) {
           overlay.components['vision-overlay'].updateFilter(selected);
         }
         
-        // Update the HUD text
         if (text) {
-          text.setAttribute('value', `Condition: ${this.labels[selected]}\n(Press Trigger or A/X)`);
+          text.setAttribute('value', `Condition: ${this.labels[selected]}\n(Press Trigger or A/X to Next)`);
         }
       }
     });
@@ -172,28 +212,24 @@
 </head>
 <body>
   <a-scene>
-    <!-- Use the A-Frame Environment Component for an outdoor scene -->
-    <!-- Presets like 'forest', 'egypt', 'contact', 'arches' work well. -->
+    <!-- Outdoor Forest Environment -->
     <a-entity environment="preset: forest; dressingAmount: 100; playArea: 1.5"></a-entity>
 
     <!-- Camera Rig -->
     <a-entity id="rig" position="0 1.6 0">
       <a-camera look-controls>
-        <!-- Vision Overlay Plane - Fixed to face user -->
-        <!-- Key fix: Disabled depth writing/testing so text renders on top -->
+        <!-- Vision Overlay Plane -->
         <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
         
         <!-- HUD Text Panel -->
         <a-entity id="hud-panel" position="0 -0.4 -0.9">
-          <!-- Translucent Background for Text -->
-          <a-plane color="black" opacity="0.6" width="1.6" height="0.4" position="0 0 -0.01"></a-plane>
-          <!-- The Text Itself -->
-          <a-text id="hud-text" value="Condition: Normal Vision\n(Press Trigger or A/X)" 
+          <a-plane color="black" opacity="0.6" width="1.8" height="0.4" position="0 0 -0.01"></a-plane>
+          <a-text id="hud-text" value="Condition: 1/12 Normal Vision\n(Press Trigger or A/X to Next)" 
                   align="center" width="2" color="#FFFFFF"></a-text>
         </a-entity>
       </a-camera>
 
-      <!-- Input Listeners attached to controllers -->
+      <!-- Input Listeners attached to Quest Controllers -->
       <a-entity mode-switcher oculus-touch-controls="hand: right"></a-entity>
       <a-entity mode-switcher oculus-touch-controls="hand: left"></a-entity>
     </a-entity>
