@@ -218,20 +218,20 @@
     <!-- Camera Rig -->
     <a-entity id="rig" position="0 1.6 0">
       <a-camera look-controls>
-        <!-- Vision Overlay Plane: Attached close to view (z = -0.5) to cover field of view -->
+        <!-- Vision Overlay Plane: Fixed close to view (z = -0.5) to cover field of view -->
         <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
         
-        <!-- HUD Text Panel: Moved further out (z = -1.8) and scaled appropriately for comfortable reading in VR -->
+        <!-- HUD Text Panel: Positioned at z = -1.8 with half-size background plate and text scale -->
         <a-entity id="hud-panel" position="0 -0.65 -1.8">
-          <!-- Dark background plate for sharp contrast -->
-          <a-plane color="black" opacity="0.65" width="3.2" height="0.7" position="0 0 -0.01"></a-plane>
-          <!-- HUD Text element -->
+          <!-- Dark background plate (width=1.6, height=0.35) -->
+          <a-plane color="black" opacity="0.65" width="1.6" height="0.35" position="0 0 -0.01"></a-plane>
+          <!-- HUD Text element (width=1.8) -->
           <a-text id="hud-text" value="Condition: 1/12 Normal Vision\n(Press Trigger or A/X to Next)" 
-                  align="center" width="3.6" color="#FFFFFF"></a-text>
+                  align="center" width="1.8" color="#FFFFFF"></a-text>
         </a-entity>
       </a-camera>
 
-      <!-- Controller Event Binding for Quest 2 Touch Controllers -->
+      <!-- Controller Event Binding for Quest Touch Controllers -->
       <a-entity mode-switcher oculus-touch-controls="hand: right"></a-entity>
       <a-entity mode-switcher oculus-touch-controls="hand: left"></a-entity>
     </a-entity>
