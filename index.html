@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vision Simulator VR</title>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script>
+    AFRAME.registerComponent('vision-overlay', {
+      init: function () {
+        const el = this.el;
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          depthTest: false
+        });
+
+        el.getOrCreateObject3D('mesh').material = material;
+
+        this.ctx = ctx;
+        this.texture = texture;
+        this.currentMode = 'normal';
+
+        this.updateFilter('normal');
+      },
+
+      updateFilter: function (mode) {
+        this.currentMode = mode;
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, 512, 512);
+
+        if (mode === 'amd') {
+          // Central scotoma (Macular Degeneration)
+          const grad = ctx.createRadialGradient(256, 256, 10, 256, 256, 120);
+          grad.addColorStop(0, 'rgba(20, 20, 20, 0.98)');
+          grad.addColorStop(0.7, 'rgba(50, 50, 50, 0.8)');
+          grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(256, 256, 120, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (mode === 'glaucoma') {
+          // Tunnel vision / Peripheral vision loss
+          ctx.fillStyle = 'rgba(0,0,0,0.95)';
+          ctx.fillRect(0, 0, 512, 512);
+          ctx.globalCompositeOperation = 'destination-out';
+          const grad = ctx.createRadialGradient(256, 256, 50, 256, 256, 140);
+          grad.addColorStop(0, 'rgba(0,0,0,1)');
+          grad.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(256, 256, 140, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
+        } else if (mode === 'diabetic') {
+          // Floating scotomas / hemorrhages
+          ctx.fillStyle = 'rgba(10, 10, 10, 0.85)';
+          const spots = [[150, 120, 35], [320, 180, 45], [200, 340, 50], [380, 320, 30]];
+          spots.forEach(([x, y, r]) => {
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        } else if (mode === 'cataract') {
+          // Blurry yellow/brown wash
+          ctx.fillStyle = 'rgba(180, 140, 60, 0.35)';
+          ctx.fillRect(0, 0, 512, 512);
+        }
+
+        this.texture.needsUpdate = true;
+      }
+    });
+
+    // Cycle through modes when trigger/click is pressed
+    AFRAME.registerComponent('mode-switcher', {
+      init: function () {
+        const modes = ['normal', 'amd', 'glaucoma', 'diabetic', 'cataract'];
+        let index = 0;
+        const overlay = document.querySelector('#overlay');
+        const text = document.querySelector('#hud-text');
+
+        this.el.addEventListener('click', () => {
+          index = (index + 1) % modes.length;
+          const selected = modes[index];
+          overlay.components['vision-overlay'].updateFilter(selected);
+          
+          const labels = {
+            'normal': 'Normal Vision',
+            'amd': 'Macular Degeneration (AMD)',
+            'glaucoma': 'Glaucoma (Tunnel Vision)',
+            'diabetic': 'Diabetic Retinopathy',
+            'cataract': 'Cataracts (Clouded / Tinted)'
+          };
+          text.setAttribute('value', `Condition: ${labels[selected]}\n(Click trigger to switch)`);
+        });
+      }
+    });
+  </script>
+</head>
+<body>
+  <a-scene mode-switcher>
+    <!-- Environment / 360 Room -->
+    <a-sky color="#ECEQE8"></a-sky>
+    
+    <!-- Test Objects in Room -->
+    <a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
+    <a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere>
+    <a-cylinder position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
+    <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#7BC8A4"></a-plane>
+
+    <!-- Camera Rig & HUD Overlay -->
+    <a-entity id="rig" position="0 1.6 0">
+      <a-camera look-controls>
+        <!-- Overlay HUD fixed to view -->
+        <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="1" height="1"></a-plane>
+        
+        <!-- Interactive Mode Text -->
+        <a-text id="hud-text" value="Condition: Normal Vision\n(Click trigger to switch)" 
+                position="0 -0.3 -0.8" align="center" width="1.5" color="#FFFFFF"></a-text>
+      </a-camera>
+
+      <!-- Quest Controllers -->
+      <a-entity oculus-touch-controls="hand: right"></a-entity>
+      <a-entity oculus-touch-controls="hand: left"></a-entity>
+    </a-entity>
+  </a-scene>
+</body>
+</html>
