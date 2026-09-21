@@ -2,62 +2,74 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vision Simulator VR</title>
+  <title>Vision Simulator VR - Outdoor Scene</title>
+  <!-- Load A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <!-- Load A-Frame Environment Component -->
+  <script src="https://unpkg.com/aframe-environment-component@1.3.1/dist/aframe-environment-component.min.js"></script>
+  
   <script>
     AFRAME.registerComponent('vision-overlay', {
       init: function () {
         const el = this.el;
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        canvas.width = 1024; // Increased resolution for clarity
+        canvas.height = 1024;
         const ctx = canvas.getContext('2d');
 
         const texture = new THREE.CanvasTexture(canvas);
         const material = new THREE.MeshBasicMaterial({
           map: texture,
           transparent: true,
-          depthTest: false
+          depthTest: false,
+          depthWrite: false, // Prevent depth issues
+          opacity: 1 // Base opacity
         });
 
+        // Use a basic plane mesh and disable depth sorting issues
         el.getOrCreateObject3D('mesh').material = material;
+        el.setAttribute('material', { shader: 'flat', depthTest: false });
 
         this.ctx = ctx;
         this.texture = texture;
+        this.currentMode = 'normal';
+
         this.updateFilter('normal');
       },
 
       updateFilter: function (mode) {
+        this.currentMode = mode;
         const ctx = this.ctx;
-        ctx.clearRect(0, 0, 512, 512);
+        const el = this.el;
+        ctx.clearRect(0, 0, 1024, 1024);
 
         if (mode === 'amd') {
           // Central scotoma (Macular Degeneration)
-          const grad = ctx.createRadialGradient(256, 256, 10, 256, 256, 120);
-          grad.addColorStop(0, 'rgba(20, 20, 20, 0.98)');
-          grad.addColorStop(0.7, 'rgba(50, 50, 50, 0.8)');
+          const grad = ctx.createRadialGradient(512, 512, 10, 512, 512, 300);
+          grad.addColorStop(0, 'rgba(10, 10, 10, 0.99)');
+          grad.addColorStop(0.7, 'rgba(30, 30, 30, 0.9)');
           grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           ctx.fillStyle = grad;
           ctx.beginPath();
-          ctx.arc(256, 256, 120, 0, Math.PI * 2);
+          ctx.arc(512, 512, 300, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'glaucoma') {
           // Tunnel vision / Peripheral vision loss
-          ctx.fillStyle = 'rgba(0,0,0,0.95)';
-          ctx.fillRect(0, 0, 512, 512);
+          ctx.fillStyle = 'rgba(0,0,0,0.98)';
+          ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
-          const grad = ctx.createRadialGradient(256, 256, 50, 256, 256, 140);
+          const grad = ctx.createRadialGradient(512, 512, 120, 512, 512, 350);
           grad.addColorStop(0, 'rgba(0,0,0,1)');
           grad.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = grad;
           ctx.beginPath();
-          ctx.arc(256, 256, 140, 0, Math.PI * 2);
+          ctx.arc(512, 512, 350, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalCompositeOperation = 'source-over';
         } else if (mode === 'diabetic') {
-          // Floating scotomas / hemorrhages
-          ctx.fillStyle = 'rgba(10, 10, 10, 0.85)';
-          const spots = [[150, 120, 35], [320, 180, 45], [200, 340, 50], [380, 320, 30]];
+          // Floating scotomas / hemorrhages (Floaters)
+          ctx.fillStyle = 'rgba(15, 15, 15, 0.9)';
+          const spots = [[300, 250, 70], [640, 360, 90], [400, 680, 100], [760, 640, 60], [512, 100, 50], [900, 900, 80]];
           spots.forEach(([x, y, r]) => {
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -65,39 +77,35 @@
           });
         } else if (mode === 'cataract') {
           // Blurry yellow/brown wash
-          ctx.fillStyle = 'rgba(180, 140, 60, 0.35)';
-          ctx.fillRect(0, 0, 512, 512);
+          ctx.fillStyle = 'rgba(190, 150, 80, 0.4)';
+          ctx.fillRect(0, 0, 1024, 1024);
         } else if (mode === 'keratoconus') {
-          // Irregular astigmatism & ghosting distortion (central conical glare mask)
-          const grad = ctx.createRadialGradient(256, 280, 5, 256, 280, 180);
-          grad.addColorStop(0, 'rgba(255, 255, 255, 0.65)');
-          grad.addColorStop(0.5, 'rgba(200, 220, 255, 0.25)');
-          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.ellipse(256, 280, 140, 200, Math.PI / 6, 0, Math.PI * 2);
-          ctx.fill();
+          // Irregular astigmatism, haloing, and ghosting
+          // Simulate with an offset transparent glare mask
+          ctx.fillStyle = 'rgba(230, 240, 255, 0.35)';
+          const spots = [[512, 560, 250], [460, 512, 180], [560, 512, 180]];
+          spots.forEach(([x, y, r]) => {
+            ctx.beginPath();
+            ctx.ellipse(x, y, r, r * 1.5, Math.PI / 8, 0, Math.PI * 2);
+            ctx.fill();
+          });
         } else if (mode === 'opacity') {
-          // Focal dense leucoma / clouding across central cornea
-          const grad = ctx.createRadialGradient(220, 200, 20, 240, 220, 110);
-          grad.addColorStop(0, 'rgba(240, 240, 240, 0.88)');
-          grad.addColorStop(0.6, 'rgba(220, 220, 220, 0.5)');
-          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-          ctx.fillStyle = grad;
+          // Focal dense leucoma / corneal clouding across one eye/section
+          ctx.fillStyle = 'rgba(250, 250, 250, 0.92)';
           ctx.beginPath();
-          ctx.arc(240, 220, 110, 0, Math.PI * 2);
+          ctx.ellipse(350, 450, 200, 300, Math.PI / 4, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'fuchs') {
-          // Widespread corneal edema (diffuse haziness & glare/halo effect)
-          ctx.fillStyle = 'rgba(230, 235, 245, 0.38)';
-          ctx.fillRect(0, 0, 512, 512);
-          
-          const grad = ctx.createRadialGradient(256, 256, 30, 256, 256, 200);
-          grad.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+          // Generalized corneal edema, causing diffuse morning fog and glare
+          ctx.fillStyle = 'rgba(240, 245, 255, 0.45)'; // Base diffuse haze
+          ctx.fillRect(0, 0, 1024, 1024);
+          // Add central glare halo
+          const grad = ctx.createRadialGradient(512, 512, 80, 512, 512, 450);
+          grad.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
           grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
           ctx.fillStyle = grad;
           ctx.beginPath();
-          ctx.arc(256, 256, 200, 0, Math.PI * 2);
+          ctx.arc(512, 512, 450, 0, Math.PI * 2);
           ctx.fill();
         }
 
@@ -127,17 +135,16 @@
           'cataract': 'Cataracts (Clouded / Tinted)',
           'keratoconus': 'Keratoconus (Distortion & Glare)',
           'opacity': 'Corneal Opacity / Scarring',
-          'fuchs': "Fuchs' Dystrophy (Corneal Edema / Fog)"
+          'fuchs': "Fuchs' Dystrophy (Corneal Edema)"
         };
 
         this.nextMode = this.nextMode.bind(this);
 
-        // Listen to window screen clicks (non-VR)
+        // Listen to window clicks (non-VR)
         window.addEventListener('click', this.nextMode);
 
-        // Listen to controller trigger presses (VR Mode)
+        // Listen to controller events (VR Mode)
         this.el.addEventListener('triggerdown', this.nextMode);
-        this.el.addEventListener('select', this.nextMode);
         this.el.addEventListener('abuttondown', this.nextMode);
         this.el.addEventListener('xbuttondown', this.nextMode);
       },
@@ -146,14 +153,18 @@
         this.index = (this.index + 1) % this.modes.length;
         const selected = this.modes[this.index];
         
+        // Find the overlay and text elements
         const overlay = document.querySelector('#overlay');
         const text = document.querySelector('#hud-text');
 
+        // Update the visual filter
         if (overlay && overlay.components['vision-overlay']) {
           overlay.components['vision-overlay'].updateFilter(selected);
         }
+        
+        // Update the HUD text
         if (text) {
-          text.setAttribute('value', `Condition: ${this.labels[selected]}\n(Press Trigger or A/X Button)`);
+          text.setAttribute('value', `Condition: ${this.labels[selected]}\n(Press Trigger or A/X)`);
         }
       }
     });
@@ -161,27 +172,28 @@
 </head>
 <body>
   <a-scene>
-    <!-- Environment / 360 Room -->
-    <a-sky color="#ECEQE8"></a-sky>
-    
-    <!-- Test Objects in Room -->
-    <a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
-    <a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere>
-    <a-cylinder position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
-    <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#7BC8A4"></a-plane>
+    <!-- Use the A-Frame Environment Component for an outdoor scene -->
+    <!-- Presets like 'forest', 'egypt', 'contact', 'arches' work well. -->
+    <a-entity environment="preset: forest; dressingAmount: 100; playArea: 1.5"></a-entity>
 
-    <!-- Camera Rig & HUD Overlay -->
+    <!-- Camera Rig -->
     <a-entity id="rig" position="0 1.6 0">
       <a-camera look-controls>
-        <!-- Overlay HUD fixed to view -->
-        <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="1" height="1"></a-plane>
+        <!-- Vision Overlay Plane - Fixed to face user -->
+        <!-- Key fix: Disabled depth writing/testing so text renders on top -->
+        <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
         
-        <!-- Interactive Mode Text -->
-        <a-text id="hud-text" value="Condition: Normal Vision\n(Press Trigger or A/X Button)" 
-                position="0 -0.3 -0.8" align="center" width="1.5" color="#FFFFFF"></a-text>
+        <!-- HUD Text Panel -->
+        <a-entity id="hud-panel" position="0 -0.4 -0.9">
+          <!-- Translucent Background for Text -->
+          <a-plane color="black" opacity="0.6" width="1.6" height="0.4" position="0 0 -0.01"></a-plane>
+          <!-- The Text Itself -->
+          <a-text id="hud-text" value="Condition: Normal Vision\n(Press Trigger or A/X)" 
+                  align="center" width="2" color="#FFFFFF"></a-text>
+        </a-entity>
       </a-camera>
 
-      <!-- Quest Controllers with Mode Switcher attached -->
+      <!-- Input Listeners attached to controllers -->
       <a-entity mode-switcher oculus-touch-controls="hand: right"></a-entity>
       <a-entity mode-switcher oculus-touch-controls="hand: left"></a-entity>
     </a-entity>
