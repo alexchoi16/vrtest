@@ -22,98 +22,106 @@
   </style>
 
   <script>
-    // Custom VR Thumbstick Locomotion & Snap Turn Component
-    AFRAME.registerComponent('vr-thumbstick-move', {
+    // Custom VR Thumbstick Locomotion & Snap Turn Component using direct WebXR Session Input Sources
+    AFRAME.registerComponent('vr-locomotion', {
       schema: {
         speed: { type: 'number', default: 2.2 },
         snapAngle: { type: 'number', default: 30 },
-        deadzone: { type: 'number', default: 0.15 }
+        deadzone: { type: 'number', default: 0.18 }
       },
       init: function () {
         this.canSnap = true;
-        this.rig = document.querySelector('#rig');
+        this.rig = this.el; // Attach to #rig
         this.camera = document.querySelector('#head');
+        
+        // Cache vectors to avoid garbage collection overhead in tick loop
+        this.dirVector = new THREE.Vector3();
+        this.sideVector = new THREE.Vector3();
+        this.upVector = new THREE.Vector3(0, 1, 0);
       },
 
       tick: function (time, timeDelta) {
-        if (!timeDelta || !this.rig) return;
+        if (!timeDelta || !this.rig || !this.camera) return;
 
         const dt = Math.min(timeDelta, 100) / 1000;
         const speed = this.data.speed * dt;
         const deadzone = this.data.deadzone;
 
-        // Scan connected WebXR Gamepads directly
-        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-        if (!gamepads) return;
-
         let moveX = 0;
         let moveY = 0;
         let snapX = 0;
 
-        for (let i = 0; i < gamepads.length; i++) {
-          const gp = gamepads[i];
-          if (!gp || !gp.axes) continue;
+        // 1. Primary Method: Access WebXR active session inputSources directly from renderer
+        const sceneEl = this.el.sceneEl;
+        const xrSession = sceneEl.renderer && sceneEl.renderer.xr ? sceneEl.renderer.xr.getSession() : null;
 
-          // Standard WebXR thumbstick mapping: axes[2] (X), axes[3] (Y) or axes[0], axes[1]
-          let axisX = gp.axes[2] !== undefined && Math.abs(gp.axes[2]) > 0.05 ? gp.axes[2] : gp.axes[0] || 0;
-          let axisY = gp.axes[3] !== undefined && Math.abs(gp.axes[3]) > 0.05 ? gp.axes[3] : gp.axes[1] || 0;
+        if (xrSession && xrSession.inputSources) {
+          for (let source of xrSession.inputSources) {
+            if (!source.gamepad || !source.gamepad.axes) continue;
 
-          // Identify hand orientation via gamepad hand property or index
-          const isLeft = gp.hand === 'left' || (gp.id && gp.id.toLowerCase().includes('left'));
-          const isRight = gp.hand === 'right' || (gp.id && gp.id.toLowerCase().includes('right'));
+            const gp = source.gamepad;
+            const axes = gp.axes;
 
-          if (isLeft || (!isRight && i === 0)) {
-            if (Math.abs(axisX) > deadzone) moveX = axisX;
-            if (Math.abs(axisY) > deadzone) moveY = axisY;
+            // Touch / Quest standard axes: [0]: touchX, [1]: touchY, [2]: thumbX, [3]: thumbY
+            let axisX = axes.length >= 4 && Math.abs(axes[2]) > 0.05 ? axes[2] : (axes[0] || 0);
+            let axisY = axes.length >= 4 && Math.abs(axes[3]) > 0.05 ? axes[3] : (axes[1] || 0);
+
+            if (source.handedness === 'left') {
+              if (Math.abs(axisX) > deadzone) moveX = axisX;
+              if (Math.abs(axisY) > deadzone) moveY = axisY;
+            } else if (source.handedness === 'right') {
+              if (Math.abs(axisX) > deadzone) snapX = axisX;
+            }
           }
+        } else if (navigator.getGamepads) {
+          // 2. Fallback Method: Standard Navigator Gamepad API
+          const gamepads = navigator.getGamepads();
+          for (let i = 0; i < gamepads.length; i++) {
+            const gp = gamepads[i];
+            if (!gp || !gp.axes) continue;
 
-          if (isRight || (!isLeft && i === 1)) {
-            if (Math.abs(axisX) > deadzone) snapX = axisX;
+            let axisX = gp.axes.length >= 4 && Math.abs(gp.axes[2]) > 0.05 ? gp.axes[2] : (gp.axes[0] || 0);
+            let axisY = gp.axes.length >= 4 && Math.abs(gp.axes[3]) > 0.05 ? gp.axes[3] : (gp.axes[1] || 0);
+
+            const hand = gp.hand || (gp.id && gp.id.toLowerCase().includes('left') ? 'left' : (gp.id && gp.id.toLowerCase().includes('right') ? 'right' : ''));
+
+            if (hand === 'left' || (!hand && i === 0)) {
+              if (Math.abs(axisX) > deadzone) moveX = axisX;
+              if (Math.abs(axisY) > deadzone) moveY = axisY;
+            } else if (hand === 'right' || (!hand && i === 1)) {
+              if (Math.abs(axisX) > deadzone) snapX = axisX;
+            }
           }
         }
 
-        // 1. Continuous Locomotion (Left Thumbstick) relative to Head Camera Yaw
+        // --- Apply Continuous Translation (Left Stick) relative to Head Yaw ---
         if (Math.abs(moveX) > 0 || Math.abs(moveY) > 0) {
-          const headEl = this.camera || document.querySelector('[camera]');
-          if (headEl) {
-            // Obtain camera rotation matrix to align walking direction with look direction
-            const cameraObj = headEl.object3D;
-            const dir = new THREE.Vector3();
-            cameraObj.getWorldDirection(dir);
-            dir.y = 0; // Lock movement strictly to horizontal ground plane
-            dir.normalize();
+          const camObj = this.camera.object3D;
+          camObj.getWorldDirection(this.dirVector);
+          
+          // Invert world direction because Three.js camera looks down -Z
+          this.dirVector.y = 0; 
+          this.dirVector.normalize();
 
-            // Right-perpendicular vector for strafing
-            const sideDir = new THREE.Vector3();
-            sideDir.crossVectors(new THREE.Vector3(0, 1, 0), dir).normalize();
+          // Calculate right side direction vector for strafing
+          this.sideVector.crossVectors(this.upVector, this.dirVector).normalize();
 
-            const deltaPos = new THREE.Vector3();
-            deltaPos.addScaledVector(dir, -moveY * speed);
-            deltaPos.addScaledVector(sideDir, moveX * speed);
-
-            const currentPos = this.rig.getAttribute('position');
-            this.rig.setAttribute('position', {
-              x: currentPos.x + deltaPos.x,
-              y: currentPos.y,
-              z: currentPos.z + deltaPos.z
-            });
-          }
+          // Apply displacement directly to Three.js Object3D Position
+          const rigObj = this.rig.object3D;
+          rigObj.position.x += (this.dirVector.x * -moveY + this.sideVector.x * moveX) * speed;
+          rigObj.position.z += (this.dirVector.z * -moveY + this.sideVector.z * moveX) * speed;
         }
 
-        // 2. Snap Rotation (Right Thumbstick)
+        // --- Apply Snap Turning (Right Stick) ---
         if (Math.abs(snapX) > 0.6) {
           if (this.canSnap) {
             this.canSnap = false;
-            const currentRot = this.rig.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
-            const angleDelta = snapX > 0 ? -this.data.snapAngle : this.data.snapAngle;
-            this.rig.setAttribute('rotation', {
-              x: currentRot.x,
-              y: currentRot.y + angleDelta,
-              z: currentRot.z
-            });
+            const rigObj = this.rig.object3D;
+            const angleRad = THREE.MathUtils.degToRad(snapX > 0 ? -this.data.snapAngle : this.data.snapAngle);
+            rigObj.rotation.y += angleRad;
           }
-        } else if (Math.abs(snapX) < 0.2) {
-          this.canSnap = true; // Reset snap lock when thumbstick centers
+        } else if (Math.abs(snapX) < 0.25) {
+          this.canSnap = true; // Reset snap threshold lock when stick returns to neutral
         }
       }
     });
@@ -148,7 +156,7 @@
         this.texture = texture;
         this.currentMode = 'normal';
 
-        // Physics variables for floating debris & head inertia
+        // Inertial physics variables for floaters & metamorphopsia
         this.lastRotation = new THREE.Euler();
         this.cameraObj = null;
         this.floaterVelX = 0;
@@ -167,13 +175,13 @@
         const dt = Math.min(timeDelta, 100) / 1000;
 
         if (!this.cameraObj) {
-          const cameraEl = document.querySelector('#head') || document.querySelector('a-camera');
+          const cameraEl = document.querySelector('#head');
           if (cameraEl) this.cameraObj = cameraEl.object3D;
         }
 
         let needsRedraw = false;
 
-        // Head Motion Physics (Floaters & Metamorphopsia Distortion Drift)
+        // Head Inertia Physics for Floaters & Visual Distortion Drift
         if (this.cameraObj) {
           const currentRot = this.cameraObj.rotation;
           const rotDiffY = currentRot.y - this.lastRotation.y;
@@ -203,7 +211,7 @@
           needsRedraw = true;
         }
 
-        // Night Headlight Glare & Photophobia Simulation
+        // Night Vehicle Headlight Glare & Photophobia Simulation
         const car1 = document.querySelector('#car1');
         const envComponent = document.querySelector('a-scene')?.components['environment'];
         const isNight = envComponent && (envComponent.data.preset === 'night' || envComponent.data.preset === 'sunset');
@@ -216,17 +224,13 @@
           if (dist < 22) {
             this.glareIntensity = Math.min(1.0, (22 - dist) / 18);
             needsRedraw = true;
-          } else {
-            if (this.glareIntensity > 0) {
-              this.glareIntensity = 0;
-              needsRedraw = true;
-            }
-          }
-        } else {
-          if (this.glareIntensity > 0) {
+          } else if (this.glareIntensity > 0) {
             this.glareIntensity = 0;
             needsRedraw = true;
           }
+        } else if (this.glareIntensity > 0) {
+          this.glareIntensity = 0;
+          needsRedraw = true;
         }
 
         if (needsRedraw) {
@@ -247,7 +251,7 @@
         const glare = this.glareIntensity;
 
         if (mode === 'amd') {
-          // 1. Age-related Macular Degeneration (AMD - central scotoma)
+          // 1. Age-related Macular Degeneration (AMD)
           const grad = ctx.createRadialGradient(512, 512, 10, 512, 512, 280);
           grad.addColorStop(0, 'rgba(15, 12, 10, 0.98)');
           grad.addColorStop(0.6, 'rgba(35, 28, 20, 0.9)');
@@ -269,7 +273,7 @@
           ctx.arc(512, 512, 350, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'cataract') {
-          // 3. Cataracts (Yellowed haze + Photophobia glare)
+          // 3. Cataracts (Yellowed Haze + Photophobia Glare)
           ctx.fillStyle = `rgba(195, 155, 75, ${0.42 + glare * 0.25})`;
           ctx.fillRect(0, 0, 1024, 1024);
 
@@ -284,7 +288,7 @@
             ctx.fill();
           }
         } else if (mode === 'diabetic') {
-          // 4. Diabetic Retinopathy (Patchy scotoma spots)
+          // 4. Diabetic Retinopathy (Patchy Scotoma Spots)
           ctx.fillStyle = 'rgba(15, 10, 5, 0.88)';
           const spots = [
             [fx - 212, fy - 262, 75], [fx + 128, fy - 152, 95], 
@@ -341,7 +345,7 @@
             ctx.fill();
           });
         } else if (mode === 'cscr') {
-          // 8. Central Serous Chorioretinopathy (CSCR - Central distortion)
+          // 8. Central Serous Chorioretinopathy (CSCR)
           const grad = ctx.createRadialGradient(fx, fy, 20, fx, fy, 190);
           grad.addColorStop(0, 'rgba(90, 100, 110, 0.72)');
           grad.addColorStop(0.85, 'rgba(150, 160, 170, 0.35)');
@@ -351,7 +355,7 @@
           ctx.arc(fx, fy, 190, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'hemianopia') {
-          // 9. Hemianopia (Half Visual Field Blocked)
+          // 9. Hemianopia (Half Visual Field Loss)
           ctx.fillStyle = 'rgba(10, 10, 10, 0.98)';
           ctx.beginPath();
           ctx.rect(0, 0, 512, 1024);
@@ -390,7 +394,7 @@
       }
     });
 
-    // Mode Switcher Component for Controller Trigger & Button Bindings
+    // Controller Trigger Mode Switcher & Web Audio Synthesizer
     AFRAME.registerComponent('mode-switcher', {
       init: function () {
         this.modes = [
@@ -419,6 +423,7 @@
 
         // Bind controller buttons for trigger cycling
         this.el.addEventListener('triggerdown', this.nextMode);
+        this.el.addEventListener('selectstart', this.nextMode);
         this.el.addEventListener('abuttondown', this.nextMode);
         this.el.addEventListener('xbuttondown', this.nextMode);
 
@@ -428,6 +433,26 @@
             this.setMode(e.target.value);
           });
         }
+      },
+
+      playAudioClick: function() {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.08);
+          }
+        } catch(e) {}
       },
 
       nextMode: function () {
@@ -450,14 +475,8 @@
       applyMode: function (selected) {
         const overlay = document.querySelector('#overlay');
         const text = document.querySelector('#hud-text');
-        const clickSound = document.querySelector('#click-sound-entity');
 
-        if (clickSound && clickSound.components.sound) {
-          try {
-            clickSound.components.sound.stopSound();
-            clickSound.components.sound.playSound();
-          } catch(e) {}
-        }
+        this.playAudioClick();
 
         if (overlay && overlay.components['vision-overlay']) {
           overlay.components['vision-overlay'].updateFilter(selected);
@@ -468,7 +487,7 @@
       }
     });
 
-    // Crosswalk Mini-Game Distance & Collision Detection
+    // Crosswalk Mini-Game Tracker
     AFRAME.registerComponent('crosswalk-tracker', {
       tick: function () {
         const rig = document.querySelector('#rig');
@@ -476,11 +495,10 @@
         const statusText = document.querySelector('#game-status-text');
         if (!rig || !statusText || !window.isMiniGameActive) return;
 
-        const pos = rig.getAttribute('position');
+        const pos = rig.object3D.position;
         const z = pos.z;
         const x = pos.x;
 
-        // Player is crossing street (z between near sidewalk ~2 and far sidewalk ~ -10)
         if (z < -3.0 && z > -11.0) {
           if (car1) {
             const carPos = car1.object3D.position;
@@ -498,12 +516,13 @@
           statusText.setAttribute('value', 'SUCCESS! You crossed safely to the far sidewalk!');
           statusText.setAttribute('color', '#10B981');
         } else {
-          statusText.setAttribute('value', 'Use joystick to walk forward onto crosswalk.');
+          statusText.setAttribute('value', 'Use joystick/WASD to walk forward onto crosswalk.');
           statusText.setAttribute('color', '#94A3B8');
         }
       }
     });
 
+    // Realistic Pedestrian Walking Component
     AFRAME.registerComponent('realistic-walker', {
       schema: {
         speed: { type: 'number', default: 1.2 },
@@ -554,14 +573,6 @@
     window.setEnvironmentPreset = function (presetName) {
       const envEl = document.querySelector('[environment]');
       const headLights = document.querySelectorAll('.headlight');
-      const clickSound = document.querySelector('#click-sound-entity');
-
-      if (clickSound && clickSound.components.sound) {
-        try {
-          clickSound.components.sound.stopSound();
-          clickSound.components.sound.playSound();
-        } catch(e) {}
-      }
 
       if (presetName === 'morning') {
         envEl.setAttribute('environment', {
@@ -588,15 +599,7 @@
       const modeText = document.querySelector('#game-mode-text');
       const btnText = document.querySelector('#mode-btn-text');
       const statusText = document.querySelector('#game-status-text');
-      const clickSound = document.querySelector('#click-sound-entity');
       const rig = document.querySelector('#rig');
-
-      if (clickSound && clickSound.components.sound) {
-        try {
-          clickSound.components.sound.stopSound();
-          clickSound.components.sound.playSound();
-        } catch(e) {}
-      }
 
       if (typeof toggleVal === 'boolean') {
         window.isMiniGameActive = toggleVal;
@@ -608,10 +611,10 @@
         if (modeText) modeText.setAttribute('value', 'Mode: Crosswalk Game Active');
         if (btnText) btnText.setAttribute('value', 'Switch to Explore');
         if (statusText) {
-          statusText.setAttribute('value', 'Use joystick to walk forward onto crosswalk.');
+          statusText.setAttribute('value', 'Use joystick/WASD to walk forward onto crosswalk.');
           statusText.setAttribute('color', '#94A3B8');
         }
-        if (rig) rig.setAttribute('position', '0 1.6 2.0'); // Position player at near sidewalk start
+        if (rig) rig.setAttribute('position', '0 1.6 2.0');
       } else {
         if (modeText) modeText.setAttribute('value', 'Mode: Free Explore (Idle)');
         if (btnText) btnText.setAttribute('value', 'Start Game');
@@ -662,20 +665,12 @@
 
     <div class="pt-2 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
       <span>VR Controls:</span>
-      <span class="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">Left Joystick = Walk / Right = Snap Turn</span>
+      <span class="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">Left Stick: Walk / Right Stick: Snap Turn</span>
     </div>
   </div>
 
   <!-- A-Frame 3D Scene Structure -->
   <a-scene render-order="background, terrain, dynamic, overlay">
-    <a-assets>
-      <audio id="click-sound" src="https://cdn.aframe.io/360-image-gallery-boilerplate/audio/click.ogg" crossorigin="anonymous"></audio>
-      <audio id="engine-sound" src="https://cdn.freesound.org/previews/387/387602_5121236-lq.mp3" crossorigin="anonymous"></audio>
-      <audio id="ambient-sound" src="https://cdn.freesound.org/previews/416/416529_5121236-lq.mp3" crossorigin="anonymous"></audio>
-    </a-assets>
-
-    <a-entity sound="src: #ambient-sound; autoplay: true; loop: true; volume: 0.3"></a-entity>
-    <a-entity id="click-sound-entity" sound="src: #click-sound; autoplay: false; volume: 0.8"></a-entity>
 
     <!-- Dynamic Environment -->
     <a-entity environment="preset: forest; skyType: atmosphere; skyColor: #87CEEB; horizonColor: #E0F6FF; lightPosition: 0 1 0.5; dressingAmount: 55; playArea: 1.5; fog: 0.04"></a-entity>
@@ -712,8 +707,7 @@
 
     <!-- Traffic Vehicles -->
     <a-entity id="car1" position="30 0.6 -4.5"
-              animation="property: position; to: -30 0.6 -4.5; loop: true; dur: 6000; easing: linear"
-              sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.6; positional: true; distanceModel: linear; maxDistance: 40">
+              animation="property: position; to: -30 0.6 -4.5; loop: true; dur: 6000; easing: linear">
       <a-box width="3.5" height="1" depth="1.8" color="#DC2626"></a-box>
       <a-box position="0 0.7 0" width="1.8" height="0.7" depth="1.6" color="#0F172A"></a-box>
       <a-sphere position="-1.7 0.1 0.5" radius="0.15" color="#FEF08A"></a-sphere>
@@ -726,8 +720,7 @@
     </a-entity>
 
     <a-entity id="car2" position="-30 0.6 -7.5"
-              animation="property: position; to: 30 0.6 -7.5; loop: true; dur: 8000; easing: linear"
-              sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.5; positional: true; distanceModel: linear; maxDistance: 40">
+              animation="property: position; to: 30 0.6 -7.5; loop: true; dur: 8000; easing: linear">
       <a-box width="3.8" height="1.1" depth="1.8" color="#2563EB"></a-box>
       <a-box position="0 0.7 0" width="2.0" height="0.7" depth="1.6" color="#1E293B"></a-box>
       <a-sphere position="1.9 0.1 0.5" radius="0.15" color="#FEF08A"></a-sphere>
@@ -768,9 +761,9 @@
       </a-entity>
     </a-entity>
 
-    <!-- Player Camera Rig with Thumbstick Locomotion & WASD Keyboard Desktop Fallback -->
-    <a-entity id="rig" position="0 1.6 2.0" vr-thumbstick-move crosswalk-tracker>
-      <a-camera id="head" look-controls wasd-controls="acceleration: 18" cursor="rayOrigin: mouse">
+    <!-- Player Camera Rig with WebXR Locomotion & Desktop WASD Controls -->
+    <a-entity id="rig" position="0 1.6 2.0" vr-locomotion crosswalk-tracker>
+      <a-camera id="head" look-controls wasd-controls="fly: false; acceleration: 25" cursor="rayOrigin: mouse">
         <!-- Canvas Overlay Plane -->
         <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" 
                  material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
@@ -815,7 +808,7 @@
           </a-entity>
 
           <!-- Hint Footer -->
-          <a-text value="Left Stick: Walk | Right Stick: Snap Turn | Trigger: Filters" 
+          <a-text value="Left Stick/WASD: Walk | Right Stick: Snap Turn | Trigger: Filters" 
                   align="center" width="0.75" color="#64748B" position="0 -0.22 0.01"></a-text>
         </a-entity>
       </a-camera>
