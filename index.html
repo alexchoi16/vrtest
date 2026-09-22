@@ -22,88 +22,103 @@
   </style>
 
   <script>
-    // Custom Thumbstick Locomotion Component for Meta Quest 2 / WebXR controllers
-    AFRAME.registerComponent('thumbstick-locomotion', {
+    // Custom VR Thumbstick Locomotion & Snap Turn Component
+    AFRAME.registerComponent('vr-thumbstick-move', {
       schema: {
         speed: { type: 'number', default: 2.2 },
-        snapAngle: { type: 'number', default: 30 }
+        snapAngle: { type: 'number', default: 30 },
+        deadzone: { type: 'number', default: 0.15 }
       },
       init: function () {
-        this.moveX = 0;
-        this.moveY = 0;
         this.canSnap = true;
-
-        // Bind thumbstick axis move events for left and right Oculus Touch / WebXR controllers
-        this.el.addEventListener('axismove', (evt) => {
-          const axis = evt.detail.axis;
-          if (!axis || axis.length < 2) return;
-
-          const isLeft = this.el.getAttribute('hand') === 'left' || this.el.id === 'left-hand';
-          const isRight = this.el.getAttribute('hand') === 'right' || this.el.id === 'right-hand';
-
-          // Left controller = continuous walking locomotion
-          if (isLeft) {
-            this.moveX = axis[2] !== undefined ? axis[2] : axis[0];
-            this.moveY = axis[3] !== undefined ? axis[3] : axis[1];
-          }
-
-          // Right controller = snap turning
-          if (isRight) {
-            const rotX = axis[2] !== undefined ? axis[2] : axis[0];
-            if (Math.abs(rotX) > 0.6) {
-              if (this.canSnap) {
-                this.canSnap = false;
-                const rig = document.querySelector('#rig');
-                if (rig) {
-                  const currentRot = rig.getAttribute('rotation');
-                  const snapDir = rotX > 0 ? -this.data.snapAngle : this.data.snapAngle;
-                  rig.setAttribute('rotation', {
-                    x: currentRot.x,
-                    y: currentRot.y + snapDir,
-                    z: currentRot.z
-                  });
-                }
-              }
-            } else if (Math.abs(rotX) < 0.2) {
-              this.canSnap = true;
-            }
-          }
-        });
+        this.rig = document.querySelector('#rig');
+        this.camera = document.querySelector('#head');
       },
 
       tick: function (time, timeDelta) {
-        if (!timeDelta || (Math.abs(this.moveX) < 0.1 && Math.abs(this.moveY) < 0.1)) return;
-
-        const rig = document.querySelector('#rig');
-        const camera = document.querySelector('a-camera');
-        if (!rig || !camera) return;
+        if (!timeDelta || !this.rig) return;
 
         const dt = Math.min(timeDelta, 100) / 1000;
         const speed = this.data.speed * dt;
+        const deadzone = this.data.deadzone;
 
-        // Calculate direction relative to camera heading
-        const cameraObj = camera.object3D;
-        const dir = new THREE.Vector3();
-        cameraObj.getWorldDirection(dir);
-        dir.y = 0; // Lock movement to ground plane
-        dir.normalize();
+        // Scan connected WebXR Gamepads directly
+        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+        if (!gamepads) return;
 
-        const sideDir = new THREE.Vector3();
-        sideDir.crossVectors(new THREE.Vector3(0, 1, 0), dir).normalize();
+        let moveX = 0;
+        let moveY = 0;
+        let snapX = 0;
 
-        const deltaPos = new THREE.Vector3();
-        deltaPos.addScaledVector(dir, -this.moveY * speed);
-        deltaPos.addScaledVector(sideDir, -this.moveX * speed);
+        for (let i = 0; i < gamepads.length; i++) {
+          const gp = gamepads[i];
+          if (!gp || !gp.axes) continue;
 
-        const currentPos = rig.getAttribute('position');
-        rig.setAttribute('position', {
-          x: currentPos.x + deltaPos.x,
-          y: currentPos.y,
-          z: currentPos.z + deltaPos.z
-        });
+          // Standard WebXR thumbstick mapping: axes[2] (X), axes[3] (Y) or axes[0], axes[1]
+          let axisX = gp.axes[2] !== undefined && Math.abs(gp.axes[2]) > 0.05 ? gp.axes[2] : gp.axes[0] || 0;
+          let axisY = gp.axes[3] !== undefined && Math.abs(gp.axes[3]) > 0.05 ? gp.axes[3] : gp.axes[1] || 0;
+
+          // Identify hand orientation via gamepad hand property or index
+          const isLeft = gp.hand === 'left' || (gp.id && gp.id.toLowerCase().includes('left'));
+          const isRight = gp.hand === 'right' || (gp.id && gp.id.toLowerCase().includes('right'));
+
+          if (isLeft || (!isRight && i === 0)) {
+            if (Math.abs(axisX) > deadzone) moveX = axisX;
+            if (Math.abs(axisY) > deadzone) moveY = axisY;
+          }
+
+          if (isRight || (!isLeft && i === 1)) {
+            if (Math.abs(axisX) > deadzone) snapX = axisX;
+          }
+        }
+
+        // 1. Continuous Locomotion (Left Thumbstick) relative to Head Camera Yaw
+        if (Math.abs(moveX) > 0 || Math.abs(moveY) > 0) {
+          const headEl = this.camera || document.querySelector('[camera]');
+          if (headEl) {
+            // Obtain camera rotation matrix to align walking direction with look direction
+            const cameraObj = headEl.object3D;
+            const dir = new THREE.Vector3();
+            cameraObj.getWorldDirection(dir);
+            dir.y = 0; // Lock movement strictly to horizontal ground plane
+            dir.normalize();
+
+            // Right-perpendicular vector for strafing
+            const sideDir = new THREE.Vector3();
+            sideDir.crossVectors(new THREE.Vector3(0, 1, 0), dir).normalize();
+
+            const deltaPos = new THREE.Vector3();
+            deltaPos.addScaledVector(dir, -moveY * speed);
+            deltaPos.addScaledVector(sideDir, moveX * speed);
+
+            const currentPos = this.rig.getAttribute('position');
+            this.rig.setAttribute('position', {
+              x: currentPos.x + deltaPos.x,
+              y: currentPos.y,
+              z: currentPos.z + deltaPos.z
+            });
+          }
+        }
+
+        // 2. Snap Rotation (Right Thumbstick)
+        if (Math.abs(snapX) > 0.6) {
+          if (this.canSnap) {
+            this.canSnap = false;
+            const currentRot = this.rig.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+            const angleDelta = snapX > 0 ? -this.data.snapAngle : this.data.snapAngle;
+            this.rig.setAttribute('rotation', {
+              x: currentRot.x,
+              y: currentRot.y + angleDelta,
+              z: currentRot.z
+            });
+          }
+        } else if (Math.abs(snapX) < 0.2) {
+          this.canSnap = true; // Reset snap lock when thumbstick centers
+        }
       }
     });
 
+    // Dynamic 2D Canvas Vision Loss Filter Component
     AFRAME.registerComponent('vision-overlay', {
       init: function () {
         const el = this.el;
@@ -133,7 +148,7 @@
         this.texture = texture;
         this.currentMode = 'normal';
 
-        // Head motion inertial variables
+        // Physics variables for floating debris & head inertia
         this.lastRotation = new THREE.Euler();
         this.cameraObj = null;
         this.floaterVelX = 0;
@@ -141,10 +156,7 @@
         this.floaterPosX = 512;
         this.floaterPosY = 512;
 
-        // Interactive Glare state
         this.glareIntensity = 0;
-
-        // Visual Snow Seed
         this.snowSeed = 0;
 
         this.updateFilter('normal');
@@ -155,13 +167,13 @@
         const dt = Math.min(timeDelta, 100) / 1000;
 
         if (!this.cameraObj) {
-          const cameraEl = document.querySelector('a-camera');
+          const cameraEl = document.querySelector('#head') || document.querySelector('a-camera');
           if (cameraEl) this.cameraObj = cameraEl.object3D;
         }
 
         let needsRedraw = false;
 
-        // Head Motion Dynamic Inertia Physics
+        // Head Motion Physics (Floaters & Metamorphopsia Distortion Drift)
         if (this.cameraObj) {
           const currentRot = this.cameraObj.rotation;
           const rotDiffY = currentRot.y - this.lastRotation.y;
@@ -186,13 +198,12 @@
           }
         }
 
-        // Animated overlay modes (Visual Snow)
         if (this.currentMode === 'visualsnow') {
           this.snowSeed = Math.random();
           needsRedraw = true;
         }
 
-        // Night Headlight Glare & Photophobia Test
+        // Night Headlight Glare & Photophobia Simulation
         const car1 = document.querySelector('#car1');
         const envComponent = document.querySelector('a-scene')?.components['environment'];
         const isNight = envComponent && (envComponent.data.preset === 'night' || envComponent.data.preset === 'sunset');
@@ -246,7 +257,7 @@
           ctx.arc(512, 512, 280, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'glaucoma') {
-          // 2. Glaucoma (Peripheral Loss / Tunnel Vision)
+          // 2. Glaucoma (Peripheral Tunnel Vision)
           ctx.fillStyle = 'rgba(5, 5, 5, 0.98)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -258,7 +269,7 @@
           ctx.arc(512, 512, 350, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'cataract') {
-          // 3. Cataracts (Clouded, yellow/brown tint, glare haloing)
+          // 3. Cataracts (Yellowed haze + Photophobia glare)
           ctx.fillStyle = `rgba(195, 155, 75, ${0.42 + glare * 0.25})`;
           ctx.fillRect(0, 0, 1024, 1024);
 
@@ -273,7 +284,7 @@
             ctx.fill();
           }
         } else if (mode === 'diabetic') {
-          // 4. Diabetic Retinopathy (Patchy scotomas & blotches)
+          // 4. Diabetic Retinopathy (Patchy scotoma spots)
           ctx.fillStyle = 'rgba(15, 10, 5, 0.88)';
           const spots = [
             [fx - 212, fy - 262, 75], [fx + 128, fy - 152, 95], 
@@ -286,7 +297,7 @@
             ctx.fill();
           });
         } else if (mode === 'rp') {
-          // 5. Retinitis Pigmentosa (Severe peripheral loss & tunnel)
+          // 5. Retinitis Pigmentosa (Severe Tunnel Vision)
           ctx.fillStyle = 'rgba(5, 5, 5, 0.99)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -298,7 +309,7 @@
           ctx.arc(512, 512, 150, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'keratoconus') {
-          // 6. Keratoconus (Ghosting, monocular polyopia)
+          // 6. Keratoconus (Monocular Polyopia / Ghosting)
           const shiftX = (fx - 512) * 0.35;
           const shiftY = (fy - 512) * 0.35;
 
@@ -313,17 +324,8 @@
             ctx.ellipse(x, y, r, r * 1.5, Math.PI / 7, 0, Math.PI * 2);
             ctx.fill();
           });
-
-          if (glare > 0) {
-            ctx.strokeStyle = `rgba(255, 255, 255, ${glare * 0.7})`;
-            ctx.lineWidth = 14;
-            ctx.beginPath();
-            ctx.moveTo(0, 512); ctx.lineTo(1024, 512);
-            ctx.moveTo(512, 0); ctx.lineTo(512, 1024);
-            ctx.stroke();
-          }
         } else if (mode === 'uveitis') {
-          // 7. Anterior Uveitis (Floaters, inflammatory cell debris, photophobia)
+          // 7. Anterior Uveitis (Inflammatory Cell Debris / Floaters)
           ctx.fillStyle = `rgba(255, 248, 225, ${0.35 + glare * 0.45})`;
           ctx.fillRect(0, 0, 1024, 1024);
 
@@ -339,7 +341,7 @@
             ctx.fill();
           });
         } else if (mode === 'cscr') {
-          // 8. Central Serous Chorioretinopathy (Central distortion / micropsia)
+          // 8. Central Serous Chorioretinopathy (CSCR - Central distortion)
           const grad = ctx.createRadialGradient(fx, fy, 20, fx, fy, 190);
           grad.addColorStop(0, 'rgba(90, 100, 110, 0.72)');
           grad.addColorStop(0.85, 'rgba(150, 160, 170, 0.35)');
@@ -349,29 +351,29 @@
           ctx.arc(fx, fy, 190, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'hemianopia') {
-          // 9. Hemianopia (Half visual field loss - Homonymous)
+          // 9. Hemianopia (Half Visual Field Blocked)
           ctx.fillStyle = 'rgba(10, 10, 10, 0.98)';
           ctx.beginPath();
-          ctx.rect(0, 0, 512, 1024); // Left half blocked
+          ctx.rect(0, 0, 512, 1024);
           ctx.fill();
         } else if (mode === 'visualsnow') {
-          // 10. Visual Snow Syndrome (Dynamic noise pattern)
+          // 10. Visual Snow Syndrome
           const imgData = ctx.createImageData(1024, 1024);
           const data = imgData.data;
           for (let i = 0; i < data.length; i += 4) {
             const v = Math.random() > 0.5 ? 255 : 0;
-            data[i] = v;     // R
-            data[i + 1] = v; // G
-            data[i + 2] = v; // B
-            data[i + 3] = 45; // Alpha
+            data[i] = v;
+            data[i + 1] = v;
+            data[i + 2] = v;
+            data[i + 3] = 45;
           }
           ctx.putImageData(imgData, 0, 0);
         } else if (mode === 'cvd') {
-          // 11. Color Vision Deficiency (Deuteranopia filter)
+          // 11. Color Vision Deficiency
           ctx.fillStyle = 'rgba(180, 160, 90, 0.38)';
           ctx.fillRect(0, 0, 1024, 1024);
         } else if (mode === 'dryeye') {
-          // 12. Severe Dry Eye / Superficial Keratitis
+          // 12. Severe Dry Eye (Keratitis)
           ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.fillStyle = 'rgba(210, 220, 235, 0.45)';
@@ -388,6 +390,7 @@
       }
     });
 
+    // Mode Switcher Component for Controller Trigger & Button Bindings
     AFRAME.registerComponent('mode-switcher', {
       init: function () {
         this.modes = [
@@ -395,7 +398,6 @@
           'rp', 'keratoconus', 'uveitis', 'cscr', 'hemianopia', 'visualsnow', 'cvd', 'dryeye'
         ];
         this.index = 0;
-        this.isGameActive = false;
         this.labels = {
           'normal': '1/13 Normal Vision',
           'amd': '2/13 Macular Degeneration (AMD)',
@@ -403,11 +405,11 @@
           'cataract': '4/13 Cataracts (Clouded / Tinted)',
           'diabetic': '5/13 Diabetic Retinopathy',
           'rp': '6/13 Retinitis Pigmentosa (Tunnel)',
-          'keratoconus': '7/13 Keratoconus (Distortion & Flare)',
+          'keratoconus': '7/13 Keratoconus (Distortion)',
           'uveitis': '8/13 Anterior Uveitis (Photophobia)',
           'cscr': '9/13 Central Serous Chorioretinopathy',
-          'hemianopia': '10/13 Hemianopia (Half-Field Loss)',
-          'visualsnow': '11/13 Visual Snow Syndrome (Static)',
+          'hemianopia': '10/13 Hemianopia (Half Loss)',
+          'visualsnow': '11/13 Visual Snow Syndrome',
           'cvd': '12/13 Color Vision Deficiency',
           'dryeye': '13/13 Severe Dry Eye (Keratitis)'
         };
@@ -415,6 +417,7 @@
         this.nextMode = this.nextMode.bind(this);
         this.setMode = this.setMode.bind(this);
 
+        // Bind controller buttons for trigger cycling
         this.el.addEventListener('triggerdown', this.nextMode);
         this.el.addEventListener('abuttondown', this.nextMode);
         this.el.addEventListener('xbuttondown', this.nextMode);
@@ -465,7 +468,7 @@
       }
     });
 
-    // Crosswalk Safety Mini-Game Position Tracking Component
+    // Crosswalk Mini-Game Distance & Collision Detection
     AFRAME.registerComponent('crosswalk-tracker', {
       tick: function () {
         const rig = document.querySelector('#rig');
@@ -477,8 +480,8 @@
         const z = pos.z;
         const x = pos.x;
 
-        // Check if player is crossing street
-        if (z < -7.0 && z > -13.0) {
+        // Player is crossing street (z between near sidewalk ~2 and far sidewalk ~ -10)
+        if (z < -3.0 && z > -11.0) {
           if (car1) {
             const carPos = car1.object3D.position;
             const distToCar = Math.abs(carPos.x - x);
@@ -489,10 +492,10 @@
               return;
             }
           }
-          statusText.setAttribute('value', 'Crossing... Watch left and right for traffic!');
+          statusText.setAttribute('value', 'Crossing... Watch left & right for traffic!');
           statusText.setAttribute('color', '#F59E0B');
-        } else if (z <= -13.0) {
-          statusText.setAttribute('value', 'SUCCESS! You crossed safely to far curb!');
+        } else if (z <= -11.0) {
+          statusText.setAttribute('value', 'SUCCESS! You crossed safely to the far sidewalk!');
           statusText.setAttribute('color', '#10B981');
         } else {
           statusText.setAttribute('value', 'Use joystick to walk forward onto crosswalk.');
@@ -515,8 +518,6 @@
         this.rightArm = this.el.querySelector('.right-arm');
         this.torso = this.el.querySelector('.torso');
         this.time = Math.random() * 100;
-        
-        this.el.object3D.matrixAutoUpdate = true;
       },
       tick: function (t, dt) {
         if (!dt) return;
@@ -529,8 +530,7 @@
         if (this.data.direction === -1 && pos.x < -25) pos.x = 25;
 
         this.time += deltaSec * 4.5;
-        const bob = Math.abs(Math.sin(this.time)) * 0.04;
-        pos.y = bob;
+        pos.y = Math.abs(Math.sin(this.time)) * 0.04;
         
         this.el.setAttribute('position', pos);
 
@@ -598,7 +598,6 @@
         } catch(e) {}
       }
 
-      // Toggle state
       if (typeof toggleVal === 'boolean') {
         window.isMiniGameActive = toggleVal;
       } else {
@@ -612,8 +611,7 @@
           statusText.setAttribute('value', 'Use joystick to walk forward onto crosswalk.');
           statusText.setAttribute('color', '#94A3B8');
         }
-        // Reset player position to start curb
-        if (rig) rig.setAttribute('position', '0 1.6 0');
+        if (rig) rig.setAttribute('position', '0 1.6 2.0'); // Position player at near sidewalk start
       } else {
         if (modeText) modeText.setAttribute('value', 'Mode: Free Explore (Idle)');
         if (btnText) btnText.setAttribute('value', 'Start Game');
@@ -627,7 +625,7 @@
 </head>
 <body class="bg-slate-900 text-slate-100 antialiased">
 
-  <!-- Desktop Overlay Panel -->
+  <!-- Desktop Control UI Panel -->
   <div class="fixed bottom-4 left-4 z-[9999] w-80 bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-2xl border border-white/20 text-slate-900 transition-all duration-300 hover:bg-white">
     <div class="flex items-center space-x-2.5 mb-2.5">
       <div class="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></div>
@@ -664,7 +662,7 @@
 
     <div class="pt-2 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
       <span>VR Controls:</span>
-      <span class="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">Joystick = Move / Trigger = Cycle</span>
+      <span class="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">Left Joystick = Walk / Right = Snap Turn</span>
     </div>
   </div>
 
@@ -687,23 +685,23 @@
     <!-- Sidewalk & Road Geometry -->
     <a-entity id="ground-surfaces">
       <!-- Asphalt Road -->
-      <a-plane position="0 0.01 -10" rotation="-90 0 0" width="100" height="8" 
+      <a-plane position="0 0.01 -6" rotation="-90 0 0" width="100" height="8" 
                material="color: #1E293B; roughness: 0.9; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Pedestrian Sidewalk -->
-      <a-plane position="0 0.02 -6.5" rotation="-90 0 0" width="100" height="3" 
+      <!-- Pedestrian Near Sidewalk -->
+      <a-plane position="0 0.02 1.5" rotation="-90 0 0" width="100" height="5" 
                material="color: #CBD5E1; roughness: 0.8; depthTest: true; depthWrite: true"></a-plane>
 
       <!-- Far Sidewalk -->
-      <a-plane position="0 0.02 -13.5" rotation="-90 0 0" width="100" height="3" 
+      <a-plane position="0 0.02 -13.5" rotation="-90 0 0" width="100" height="5" 
                material="color: #CBD5E1; roughness: 0.8; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Center Divider Line -->
-      <a-plane position="0 0.03 -10" rotation="-90 0 0" width="100" height="0.2" 
+      <!-- Center Yellow Divider Line -->
+      <a-plane position="0 0.03 -6" rotation="-90 0 0" width="100" height="0.2" 
                material="color: #FAC815; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Crosswalk Zebra Stripes -->
-      <a-entity position="0 0.04 -10">
+      <!-- Crosswalk Stripes -->
+      <a-entity position="0 0.04 -6">
         <a-plane position="-2 0 0" rotation="-90 0 0" width="0.6" height="6.5" material="color: #FFFFFF; depthTest: true; depthWrite: true"></a-plane>
         <a-plane position="-1 0 0" rotation="-90 0 0" width="0.6" height="6.5" material="color: #FFFFFF; depthTest: true; depthWrite: true"></a-plane>
         <a-plane position="0 0 0" rotation="-90 0 0" width="0.6" height="6.5" material="color: #FFFFFF; depthTest: true; depthWrite: true"></a-plane>
@@ -712,9 +710,9 @@
       </a-entity>
     </a-entity>
 
-    <!-- Animated Traffic Vehicles -->
-    <a-entity id="car1" position="30 0.6 -8.5"
-              animation="property: position; to: -30 0.6 -8.5; loop: true; dur: 6000; easing: linear"
+    <!-- Traffic Vehicles -->
+    <a-entity id="car1" position="30 0.6 -4.5"
+              animation="property: position; to: -30 0.6 -4.5; loop: true; dur: 6000; easing: linear"
               sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.6; positional: true; distanceModel: linear; maxDistance: 40">
       <a-box width="3.5" height="1" depth="1.8" color="#DC2626"></a-box>
       <a-box position="0 0.7 0" width="1.8" height="0.7" depth="1.6" color="#0F172A"></a-box>
@@ -727,8 +725,8 @@
       </a-entity>
     </a-entity>
 
-    <a-entity id="car2" position="-30 0.6 -11.5"
-              animation="property: position; to: 30 0.6 -11.5; loop: true; dur: 8000; easing: linear"
+    <a-entity id="car2" position="-30 0.6 -7.5"
+              animation="property: position; to: 30 0.6 -7.5; loop: true; dur: 8000; easing: linear"
               sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.5; positional: true; distanceModel: linear; maxDistance: 40">
       <a-box width="3.8" height="1.1" depth="1.8" color="#2563EB"></a-box>
       <a-box position="0 0.7 0" width="2.0" height="0.7" depth="1.6" color="#1E293B"></a-box>
@@ -742,7 +740,7 @@
     </a-entity>
 
     <!-- Animated Pedestrian Avatar -->
-    <a-entity realistic-walker="speed: 1.1; direction: 1" position="-10 0 -6.2" rotation="0 90 0">
+    <a-entity realistic-walker="speed: 1.1; direction: 1" position="-10 0 1.2" rotation="0 90 0">
       <a-entity class="torso" position="0 1.15 0">
         <a-box width="0.38" height="0.55" depth="0.22" color="#1E3A8A"></a-box>
         <a-cylinder position="0 0.38 0" radius="0.05" height="0.1" color="#D2A679"></a-cylinder>
@@ -770,17 +768,17 @@
       </a-entity>
     </a-entity>
 
-    <!-- Player Camera Rig with Joystick Locomotion -->
-    <a-entity id="rig" position="0 1.6 0" crosswalk-tracker>
-      <a-camera look-controls wasd-controls="acceleration: 18" cursor="rayOrigin: mouse">
+    <!-- Player Camera Rig with Thumbstick Locomotion & WASD Keyboard Desktop Fallback -->
+    <a-entity id="rig" position="0 1.6 2.0" vr-thumbstick-move crosswalk-tracker>
+      <a-camera id="head" look-controls wasd-controls="acceleration: 18" cursor="rayOrigin: mouse">
         <!-- Canvas Overlay Plane -->
         <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" 
                  material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
         
-        <!-- Compact 3D VR HUD Floating Panel (Positioned lower at 0 -0.85 -1.8, tilted -15 deg) -->
+        <!-- Lowered 3D VR HUD Panel (0 -0.85 -1.8 tilted -15 deg) -->
         <a-entity id="hud-panel" position="0 -0.85 -1.8" rotation="-15 0 0">
-          <!-- Main Backing Plane (Compact 1.8 x 0.6) -->
-          <a-plane color="#0F172A" opacity="0.92" width="1.8" height="0.6" position="0 0 -0.01" rx="0.05"></a-plane>
+          <!-- Main Backing Plane -->
+          <a-plane color="#0F172A" opacity="0.92" width="1.8" height="0.6" position="0 0 -0.01"></a-plane>
           <a-plane color="#2563EB" opacity="0.95" width="1.8" height="0.04" position="0 0.28 0"></a-plane>
           
           <!-- Compact Condition Title Text -->
@@ -795,7 +793,7 @@
           <a-text id="game-status-text" value="Free Exploration - Use joystick to navigate." 
                   align="center" width="0.8" color="#94A3B8" position="0 0.05 0.01"></a-text>
 
-          <!-- 3D Interactive Controls Row -->
+          <!-- 3D Interactive Buttons Row -->
           <a-entity position="0 -0.08 0.02">
             <!-- Mode Toggle Button -->
             <a-plane class="raycastable" onclick="toggleGameMode()" position="-0.48 0 0" width="0.42" height="0.12" color="#3B82F6">
@@ -816,15 +814,15 @@
             </a-plane>
           </a-entity>
 
-          <!-- Compact Control Instructions Hint -->
-                     <a-text value="Joystick: Move POV | Trigger: Cycle Filters" 
+          <!-- Hint Footer -->
+          <a-text value="Left Stick: Walk | Right Stick: Snap Turn | Trigger: Filters" 
                   align="center" width="0.75" color="#64748B" position="0 -0.22 0.01"></a-text>
         </a-entity>
       </a-camera>
 
-      <!-- VR Controllers with Thumbstick Movement & Snap Turning -->
-      <a-entity id="left-hand" mode-switcher thumbstick-locomotion oculus-touch-controls="hand: left" laser-controls="hand: left" raycaster="objects: .raycastable; far: 5"></a-entity>
-      <a-entity id="right-hand" mode-switcher thumbstick-locomotion oculus-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .raycastable; far: 5"></a-entity>
+      <!-- VR Controllers with Laser Pointer & Trigger Bindings -->
+      <a-entity id="left-hand" mode-switcher oculus-touch-controls="hand: left" laser-controls="hand: left" raycaster="objects: .raycastable; far: 5"></a-entity>
+      <a-entity id="right-hand" mode-switcher oculus-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .raycastable; far: 5"></a-entity>
     </a-entity>
   </a-scene>
 </body>
