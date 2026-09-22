@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -44,15 +44,104 @@
         this.canvas = canvas;
         this.ctx = ctx;
         this.texture = texture;
+        this.currentMode = 'normal';
+
+        // Head motion inertial variables (Option 4)
+        this.lastRotation = new THREE.Euler();
+        this.cameraObj = null;
+        this.floaterVelX = 0;
+        this.floaterVelY = 0;
+        this.floaterPosX = 512;
+        this.floaterPosY = 512;
+
+        // Interactive Glare state (Option 2)
+        this.glareIntensity = 0;
+
         this.updateFilter('normal');
       },
 
+      tick: function (time, timeDelta) {
+        if (!timeDelta) return;
+        const dt = Math.min(timeDelta, 100) / 1000;
+
+        // Lazy fetch camera object
+        if (!this.cameraObj) {
+          const cameraEl = document.querySelector('a-camera');
+          if (cameraEl) this.cameraObj = cameraEl.object3D;
+        }
+
+        let needsRedraw = false;
+
+        // Option 4: Head Motion Dynamic Calculations
+        if (this.cameraObj) {
+          const currentRot = this.cameraObj.rotation;
+          const rotDiffY = currentRot.y - this.lastRotation.y;
+          const rotDiffX = currentRot.x - this.lastRotation.x;
+
+          // Velocity impulse from head pitch & yaw
+          this.floaterVelX += rotDiffY * 2200;
+          this.floaterVelY -= rotDiffX * 2200;
+
+          this.lastRotation.copy(currentRot);
+
+          // Apply damping & spring tension return to center
+          this.floaterVelX *= 0.91;
+          this.floaterVelY *= 0.91;
+
+          this.floaterPosX += this.floaterVelX * dt;
+          this.floaterPosY += this.floaterVelY * dt;
+
+          // Soft spring attraction toward center (512, 512)
+          this.floaterPosX += (512 - this.floaterPosX) * 1.5 * dt;
+          this.floaterPosY += (512 - this.floaterPosY) * 1.5 * dt;
+
+          if (Math.abs(this.floaterVelX) > 0.5 || Math.abs(this.floaterVelY) > 0.5) {
+            needsRedraw = true;
+          }
+        }
+
+        // Option 2: Calculate headlight brightness relative to camera view angle
+        const car1 = document.querySelector('#car1');
+        const envComponent = document.querySelector('a-scene').components['environment'];
+        const isNight = envComponent && envComponent.data.preset === 'night';
+
+        if (isNight && car1 && this.cameraObj) {
+          const carPos = car1.object3D.position;
+          const camPos = this.cameraObj.position;
+          const dist = carPos.distanceTo(camPos);
+
+          if (dist < 22) {
+            this.glareIntensity = Math.min(1.0, (22 - dist) / 18);
+            needsRedraw = true;
+          } else {
+            if (this.glareIntensity > 0) {
+              this.glareIntensity = 0;
+              needsRedraw = true;
+            }
+          }
+        } else {
+          if (this.glareIntensity > 0) {
+            this.glareIntensity = 0;
+            needsRedraw = true;
+          }
+        }
+
+        if (needsRedraw) {
+          this.updateFilter(this.currentMode);
+        }
+      },
+
       updateFilter: function (mode) {
+        this.currentMode = mode;
         const ctx = this.ctx;
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalCompositeOperation = 'source-over';
         ctx.clearRect(0, 0, 1024, 1024);
+
+        const fx = this.floaterPosX;
+        const fy = this.floaterPosY;
+        const glare = this.glareIntensity;
 
         if (mode === 'amd') {
           // Macular Degeneration (Central Scotoma)
@@ -77,35 +166,67 @@
           ctx.arc(512, 512, 350, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'diabetic') {
-          // Diabetic Retinopathy (Scotomas)
+          // Diabetic Retinopathy (Inertial Floaters + Scotomas)
           ctx.fillStyle = 'rgba(15, 10, 5, 0.88)';
-          const spots = [[300, 250, 75], [640, 360, 95], [400, 680, 105], [760, 640, 65], [512, 120, 55], [880, 880, 85], [200, 800, 70]];
+          const spots = [
+            [fx - 212, fy - 262, 75], [fx + 128, fy - 152, 95], 
+            [fx - 112, fy + 168, 105], [fx + 248, fy + 128, 65], 
+            [fx, fy - 392, 55], [fx + 368, fy + 368, 85]
+          ];
           spots.forEach(([x, y, r]) => {
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
             ctx.fill();
           });
         } else if (mode === 'cataract') {
-          // Cataracts (Yellowish Clouding)
-          ctx.fillStyle = 'rgba(195, 155, 75, 0.42)';
+          // Cataracts (Clouded Vision + Enhanced Night Headlight Glare Haloes)
+          ctx.fillStyle = `rgba(195, 155, 75, ${0.42 + glare * 0.25})`;
           ctx.fillRect(0, 0, 1024, 1024);
+
+          if (glare > 0) {
+            const grad = ctx.createRadialGradient(512, 512, 20, 512, 512, 450);
+            grad.addColorStop(0, `rgba(255, 255, 220, ${glare * 0.85})`);
+            grad.addColorStop(0.5, `rgba(255, 200, 100, ${glare * 0.5})`);
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(512, 512, 450, 0, Math.PI * 2);
+            ctx.fill();
+          }
         } else if (mode === 'keratoconus') {
-          // Keratoconus (Distortion & Light Flares)
-          ctx.fillStyle = 'rgba(235, 242, 255, 0.38)';
-          const spots = [[512, 560, 260], [450, 500, 190], [570, 500, 190]];
+          // Keratoconus (Dynamic Ghosting & Streak Flare)
+          const shiftX = (fx - 512) * 0.35;
+          const shiftY = (fy - 512) * 0.35;
+
+          ctx.fillStyle = `rgba(235, 242, 255, ${0.38 + glare * 0.3})`;
+          const spots = [
+            [512 + shiftX, 560 + shiftY, 260], 
+            [450 - shiftX, 500 - shiftY, 190], 
+            [570 + shiftX, 500 + shiftY, 190]
+          ];
           spots.forEach(([x, y, r]) => {
             ctx.beginPath();
             ctx.ellipse(x, y, r, r * 1.5, Math.PI / 7, 0, Math.PI * 2);
             ctx.fill();
           });
+
+          if (glare > 0) {
+            // Light flare streaks
+            ctx.strokeStyle = `rgba(255, 255, 255, ${glare * 0.7})`;
+            ctx.lineWidth = 14;
+            ctx.beginPath();
+            ctx.moveTo(0, 512); ctx.lineTo(1024, 512);
+            ctx.moveTo(512, 0); ctx.lineTo(512, 1024);
+            ctx.stroke();
+          }
         } else if (mode === 'opacity') {
-          // Corneal Opacity / Scarring
+          // Corneal Opacity
           ctx.fillStyle = 'rgba(245, 245, 245, 0.92)';
           ctx.beginPath();
           ctx.ellipse(360, 440, 210, 310, Math.PI / 4, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'fuchs') {
-          // Fuchs' Dystrophy (Corneal Edema)
+          // Fuchs' Dystrophy
           ctx.fillStyle = 'rgba(235, 242, 255, 0.42)';
           ctx.fillRect(0, 0, 1024, 1024);
           const grad = ctx.createRadialGradient(512, 512, 80, 512, 512, 460);
@@ -116,7 +237,7 @@
           ctx.arc(512, 512, 460, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'rp') {
-          // Retinitis Pigmentosa (Extreme Tunnel)
+          // Retinitis Pigmentosa (Extreme Tunnel Vision)
           ctx.fillStyle = 'rgba(5, 5, 5, 0.99)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -128,21 +249,26 @@
           ctx.arc(512, 512, 150, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'cscr') {
-          // Central Serous Chorioretinopathy
-          const grad = ctx.createRadialGradient(512, 512, 20, 512, 512, 190);
+          // Central Serous Chorioretinopathy (Dynamic Center Distortion)
+          const grad = ctx.createRadialGradient(fx, fy, 20, fx, fy, 190);
           grad.addColorStop(0, 'rgba(90, 100, 110, 0.72)');
           grad.addColorStop(0.85, 'rgba(150, 160, 170, 0.35)');
           grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
           ctx.fillStyle = grad;
           ctx.beginPath();
-          ctx.arc(512, 512, 190, 0, Math.PI * 2);
+          ctx.arc(fx, fy, 190, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'uveitis') {
-          // Anterior Uveitis (Photophobia / Floating Cells)
-          ctx.fillStyle = 'rgba(255, 248, 225, 0.35)';
+          // Anterior Uveitis (Drifting Inflammatory Debris/Cells + Photophobia)
+          ctx.fillStyle = `rgba(255, 248, 225, ${0.35 + glare * 0.45})`;
           ctx.fillRect(0, 0, 1024, 1024);
-          ctx.fillStyle = 'rgba(170, 160, 140, 0.65)';
-          const cells = [[480, 490, 14], [530, 520, 9], [500, 460, 16], [450, 530, 11], [550, 470, 10], [420, 440, 8]];
+
+          ctx.fillStyle = 'rgba(170, 160, 140, 0.75)';
+          const cells = [
+            [fx - 32, fy - 22, 14], [fx + 18, fy + 8, 9], 
+            [fx - 12, fy - 52, 16], [fx - 62, fy + 18, 11], 
+            [fx + 38, fy - 42, 10], [fx - 92, fy - 72, 8]
+          ];
           cells.forEach(([x, y, r]) => {
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -288,20 +414,48 @@
         if (this.torso) this.torso.setAttribute('rotation', `0 ${Math.sin(this.time) * 3} 0`);
       }
     });
+
+    // Option 3: Time-of-Day Switcher Handler
+    window.setEnvironmentPreset = function (presetName) {
+      const envEl = document.querySelector('[environment]');
+      const headLights = document.querySelectorAll('.headlight');
+
+      if (presetName === 'morning') {
+        envEl.setAttribute('environment', {
+          preset: 'forest', skyType: 'atmosphere', skyColor: '#87CEEB', horizonColor: '#E0F6FF',
+          lightPosition: { x: 0, y: 1, z: 0.5 }, dressingAmount: 55, fog: 0.04
+        });
+        headLights.forEach(hl => hl.setAttribute('visible', 'false'));
+      } else if (presetName === 'dusk') {
+        envEl.setAttribute('environment', {
+          preset: 'sunset', skyType: 'gradient', horizonColor: '#FDBA74',
+          lightPosition: { x: -0.8, y: 0.2, z: -0.5 }, dressingAmount: 55, fog: 0.08
+        });
+        headLights.forEach(hl => hl.setAttribute('visible', 'true'));
+      } else if (presetName === 'night') {
+        envEl.setAttribute('environment', {
+          preset: 'night', skyType: 'gradient', horizonColor: '#0F172A',
+          lightPosition: { x: 0, y: -1, z: 0 }, dressingAmount: 55, fog: 0.12
+        });
+        headLights.forEach(hl => hl.setAttribute('visible', 'true'));
+      }
+    };
   </script>
 </head>
 <body class="bg-slate-900 text-slate-100 antialiased">
 
+  <!-- Interactive 2D UI Control Panel -->
   <div class="fixed top-4 left-4 z-[9999] w-80 bg-white/95 backdrop-blur-md rounded-2xl p-5 shadow-2xl border border-white/20 text-slate-900 transition-all duration-300 hover:bg-white">
     <div class="flex items-center space-x-3 mb-3">
       <div class="w-3 h-3 rounded-full bg-blue-600 animate-pulse"></div>
       <h3 class="font-bold text-base tracking-tight text-blue-600">Vision Simulator VR</h3>
     </div>
     
+    <!-- Vision Condition Dropdown -->
     <label for="condition-select" class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-      Select Condition
+      1. Vision Condition
     </label>
-    <select id="condition-select" class="w-full px-3 py-2 bg-slate-100 hover:bg-slate-200 focus:bg-white border border-slate-300 rounded-xl text-slate-800 text-sm font-medium transition-all outline-none focus:ring-2 focus:ring-blue-500">
+    <select id="condition-select" class="w-full px-3 py-2 bg-slate-100 hover:bg-slate-200 focus:bg-white border border-slate-300 rounded-xl text-slate-800 text-sm font-medium transition-all outline-none focus:ring-2 focus:ring-blue-500 mb-3">
       <option value="normal">1. Normal Vision</option>
       <option value="amd">2. Macular Degeneration (AMD)</option>
       <option value="glaucoma">3. Glaucoma (Peripheral Loss)</option>
@@ -316,7 +470,17 @@
       <option value="dryeye">12. Severe Dry Eye (Keratitis)</option>
     </select>
 
-    <div class="mt-4 pt-3 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between">
+    <!-- Option 3: Time of Day Selector -->
+    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+      2. Time of Day (Option 3)
+    </label>
+    <div class="grid grid-cols-3 gap-1.5 mb-3">
+      <button onclick="setEnvironmentPreset('morning')" class="px-2 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 transition-all">Morning</button>
+      <button onclick="setEnvironmentPreset('dusk')" class="px-2 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 transition-all">Dusk</button>
+      <button onclick="setEnvironmentPreset('night')" class="px-2 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 transition-all">Night</button>
+    </div>
+
+    <div class="pt-3 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between">
       <span>VR Controls:</span>
       <span class="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">Trigger / A / X</span>
     </div>
@@ -333,26 +497,26 @@
     <a-entity sound="src: #ambient-sound; autoplay: true; loop: true; volume: 0.3"></a-entity>
     <a-entity id="click-sound-entity" sound="src: #click-sound; autoplay: false; volume: 0.8"></a-entity>
 
-    <!-- Bright Outdoor Environment -->
+    <!-- Environment Preset Layer -->
     <a-entity environment="preset: forest; skyType: atmosphere; skyColor: #87CEEB; horizonColor: #E0F6FF; lightPosition: 0 1 0.5; dressingAmount: 55; playArea: 1.5; fog: 0.04"></a-entity>
     <a-entity light="type: ambient; color: #E0F2FE; intensity: 0.85"></a-entity>
     <a-entity light="type: directional; color: #FFFDF0; intensity: 1.25" position="-10 20 15"></a-entity>
 
-    <!-- Ground Surfaces with Fixed Depth Offsets and No Z-Fighting -->
+    <!-- Ground Surfaces with Layered Depth Offsets -->
     <a-entity id="ground-surfaces">
-      <!-- Asphalt Road (Base layer) -->
+      <!-- Asphalt Road -->
       <a-plane position="0 0.01 -10" rotation="-90 0 0" width="100" height="8" 
                material="color: #1E293B; roughness: 0.9; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Sidewalk (Elevated above ground) -->
+      <!-- Sidewalk -->
       <a-plane position="0 0.02 -6.5" rotation="-90 0 0" width="100" height="3" 
                material="color: #CBD5E1; roughness: 0.8; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Center Yellow Lane Markings (Offset on top of road) -->
+      <!-- Center Yellow Lane Markings -->
       <a-plane position="0 0.03 -10" rotation="-90 0 0" width="100" height="0.2" 
                material="color: #FAC815; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Crosswalk White Stripes (Elevated above road and sidewalk) -->
+      <!-- Crosswalk White Stripes -->
       <a-entity position="0 0.04 -6.5">
         <a-plane position="-2 0 0" rotation="-90 0 0" width="0.6" height="2.8" material="color: #FFFFFF; depthTest: true; depthWrite: true"></a-plane>
         <a-plane position="-1 0 0" rotation="-90 0 0" width="0.6" height="2.8" material="color: #FFFFFF; depthTest: true; depthWrite: true"></a-plane>
@@ -362,7 +526,7 @@
       </a-entity>
     </a-entity>
 
-    <!-- Traffic Car 1 -->
+    <!-- Traffic Car 1 with Interactive Headlights (Option 2) -->
     <a-entity id="car1" position="30 0.6 -8.5"
               animation="property: position; to: -30 0.6 -8.5; loop: true; dur: 6000; easing: linear"
               sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.6; positional: true; distanceModel: linear; maxDistance: 40">
@@ -370,6 +534,12 @@
       <a-box position="0 0.7 0" width="1.8" height="0.7" depth="1.6" color="#0F172A"></a-box>
       <a-sphere position="-1.7 0.1 0.5" radius="0.15" color="#FEF08A"></a-sphere>
       <a-sphere position="-1.7 0.1 -0.5" radius="0.15" color="#FEF08A"></a-sphere>
+
+      <!-- Bright Headlight Beams for Night Glare Testing -->
+      <a-entity class="headlight" visible="false" position="-1.8 0.1 0">
+        <a-entity light="type: spot; color: #FFFDF0; intensity: 4.5; angle: 45; penumbra: 0.5" rotation="0 -90 0"></a-entity>
+        <a-cone position="-2.5 0 0" rotation="0 0 -90" radius-bottom="1.2" radius-top="0.1" height="5" material="color: #FEF08A; opacity: 0.25; transparent: true"></a-cone>
+      </a-entity>
     </a-entity>
 
     <!-- Traffic Car 2 -->
@@ -380,6 +550,11 @@
       <a-box position="0 0.7 0" width="2.0" height="0.7" depth="1.6" color="#1E293B"></a-box>
       <a-sphere position="1.9 0.1 0.5" radius="0.15" color="#FEF08A"></a-sphere>
       <a-sphere position="1.9 0.1 -0.5" radius="0.15" color="#FEF08A"></a-sphere>
+
+      <a-entity class="headlight" visible="false" position="1.9 0.1 0">
+        <a-entity light="type: spot; color: #FFFDF0; intensity: 4.5; angle: 45; penumbra: 0.5" rotation="0 90 0"></a-entity>
+        <a-cone position="2.5 0 0" rotation="0 0 90" radius-bottom="1.2" radius-top="0.1" height="5" material="color: #FEF08A; opacity: 0.25; transparent: true"></a-cone>
+      </a-entity>
     </a-entity>
 
     <!-- Pedestrian 1: Adult Male -->
@@ -455,6 +630,7 @@
       </a-entity>
     </a-entity>
 
+    <!-- Camera Rig & VR Overlay Mesh -->
     <a-entity id="rig" position="0 1.6 0">
       <a-camera look-controls>
         <!-- Canvas Overlay Plane for Vision Simulation -->
