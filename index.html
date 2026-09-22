@@ -22,7 +22,7 @@
   </style>
 
   <script>
-    // Custom VR Thumbstick Locomotion & Snap Turn Component using direct WebXR Session Input Sources
+    // Custom VR Thumbstick Locomotion & Snap Turn Component with natural joystick directions
     AFRAME.registerComponent('vr-locomotion', {
       schema: {
         speed: { type: 'number', default: 2.2 },
@@ -48,7 +48,7 @@
         const deadzone = this.data.deadzone;
 
         let moveX = 0;
-        let moveY = 0;
+        let moveY = 0; // Pushing stick UP yields moveY > 0 (forward)
         let snapX = 0;
 
         // 1. Primary Method: Access WebXR active session inputSources directly from renderer
@@ -62,13 +62,14 @@
             const gp = source.gamepad;
             const axes = gp.axes;
 
-            // Touch / Quest standard axes: [0]: touchX, [1]: touchY, [2]: thumbX, [3]: thumbY
+            // Standard WebXR axes: [0]: touchX, [1]: touchY, [2]: thumbX, [3]: thumbY
             let axisX = axes.length >= 4 && Math.abs(axes[2]) > 0.05 ? axes[2] : (axes[0] || 0);
             let axisY = axes.length >= 4 && Math.abs(axes[3]) > 0.05 ? axes[3] : (axes[1] || 0);
 
             if (source.handedness === 'left') {
               if (Math.abs(axisX) > deadzone) moveX = axisX;
-              if (Math.abs(axisY) > deadzone) moveY = axisY;
+              // INVERTED FIX: WebXR Y-axis is negative UP (-1). Negating it makes pushing UP positive (forward)
+              if (Math.abs(axisY) > deadzone) moveY = -axisY; 
             } else if (source.handedness === 'right') {
               if (Math.abs(axisX) > deadzone) snapX = axisX;
             }
@@ -87,7 +88,7 @@
 
             if (hand === 'left' || (!hand && i === 0)) {
               if (Math.abs(axisX) > deadzone) moveX = axisX;
-              if (Math.abs(axisY) > deadzone) moveY = axisY;
+              if (Math.abs(axisY) > deadzone) moveY = -axisY; // Inverted for natural forward/backward
             } else if (hand === 'right' || (!hand && i === 1)) {
               if (Math.abs(axisX) > deadzone) snapX = axisX;
             }
@@ -99,7 +100,7 @@
           const camObj = this.camera.object3D;
           camObj.getWorldDirection(this.dirVector);
           
-          // Invert world direction because Three.js camera looks down -Z
+          // Cam look direction points backward in +Z, so dirVector.z < 0 is forward
           this.dirVector.y = 0; 
           this.dirVector.normalize();
 
@@ -107,9 +108,10 @@
           this.sideVector.crossVectors(this.upVector, this.dirVector).normalize();
 
           // Apply displacement directly to Three.js Object3D Position
+          // Note: -dirVector * moveY moves FORWARD (-Z relative to look) when moveY > 0 (pushing stick UP)
           const rigObj = this.rig.object3D;
-          rigObj.position.x += (this.dirVector.x * -moveY + this.sideVector.x * moveX) * speed;
-          rigObj.position.z += (this.dirVector.z * -moveY + this.sideVector.z * moveX) * speed;
+          rigObj.position.x += (-this.dirVector.x * moveY + this.sideVector.x * moveX) * speed;
+          rigObj.position.z += (-this.dirVector.z * moveY + this.sideVector.z * moveX) * speed;
         }
 
         // --- Apply Snap Turning (Right Stick) ---
@@ -126,7 +128,7 @@
       }
     });
 
-    // Dynamic 2D Canvas Vision Loss Filter Component
+    // Dynamic 2D Canvas Vision Loss Filter Component with floaters & photophobia glare
     AFRAME.registerComponent('vision-overlay', {
       init: function () {
         const el = this.el;
@@ -273,7 +275,7 @@
           ctx.arc(512, 512, 350, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'cataract') {
-          // 3. Cataracts (Yellowed Haze + Photophobia Glare)
+          // 3. Cataracts (Clouded / Tinted + Photophobia)
           ctx.fillStyle = `rgba(195, 155, 75, ${0.42 + glare * 0.25})`;
           ctx.fillRect(0, 0, 1024, 1024);
 
@@ -288,7 +290,7 @@
             ctx.fill();
           }
         } else if (mode === 'diabetic') {
-          // 4. Diabetic Retinopathy (Patchy Scotoma Spots)
+          // 4. Diabetic Retinopathy (Patchy Bleeding Scotomas)
           ctx.fillStyle = 'rgba(15, 10, 5, 0.88)';
           const spots = [
             [fx - 212, fy - 262, 75], [fx + 128, fy - 152, 95], 
@@ -301,7 +303,7 @@
             ctx.fill();
           });
         } else if (mode === 'rp') {
-          // 5. Retinitis Pigmentosa (Severe Tunnel Vision)
+          // 5. Retinitis Pigmentosa (Severe Pin-hole Tunnel)
           ctx.fillStyle = 'rgba(5, 5, 5, 0.99)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -313,7 +315,7 @@
           ctx.arc(512, 512, 150, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'keratoconus') {
-          // 6. Keratoconus (Monocular Polyopia / Ghosting)
+          // 6. Keratoconus (Monocular Distortion & Polyopia Ghosting)
           const shiftX = (fx - 512) * 0.35;
           const shiftY = (fy - 512) * 0.35;
 
@@ -329,7 +331,7 @@
             ctx.fill();
           });
         } else if (mode === 'uveitis') {
-          // 7. Anterior Uveitis (Inflammatory Cell Debris / Floaters)
+          // 7. Anterior Uveitis (Photophobia & Inflammatory Cell Debris)
           ctx.fillStyle = `rgba(255, 248, 225, ${0.35 + glare * 0.45})`;
           ctx.fillRect(0, 0, 1024, 1024);
 
@@ -355,7 +357,7 @@
           ctx.arc(fx, fy, 190, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'hemianopia') {
-          // 9. Hemianopia (Half Visual Field Loss)
+          // 9. Hemianopia (Half Visual Field Cut)
           ctx.fillStyle = 'rgba(10, 10, 10, 0.98)';
           ctx.beginPath();
           ctx.rect(0, 0, 512, 1024);
@@ -387,6 +389,16 @@
             ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, Math.PI / 12, 0, Math.PI * 2);
             ctx.fill();
           });
+        } else if (mode === 'stargardt') {
+          // 13. Stargardt Disease (Central Blind Spot & Peripheral Whorls)
+          const grad = ctx.createRadialGradient(fx, fy, 15, fx, fy, 220);
+          grad.addColorStop(0, 'rgba(20, 15, 10, 0.96)');
+          grad.addColorStop(0.7, 'rgba(80, 60, 40, 0.85)');
+          grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(fx, fy, 220, 0, Math.PI * 2);
+          ctx.fill();
         }
 
         ctx.restore();
@@ -399,7 +411,7 @@
       init: function () {
         this.modes = [
           'normal', 'amd', 'glaucoma', 'cataract', 'diabetic', 
-          'rp', 'keratoconus', 'uveitis', 'cscr', 'hemianopia', 'visualsnow', 'cvd', 'dryeye'
+          'rp', 'keratoconus', 'uveitis', 'cscr', 'hemianopia', 'visualsnow', 'cvd', 'dryeye', 'stargardt'
         ];
         this.index = 0;
         this.labels = {
@@ -415,13 +427,14 @@
           'hemianopia': '10/13 Hemianopia (Half Loss)',
           'visualsnow': '11/13 Visual Snow Syndrome',
           'cvd': '12/13 Color Vision Deficiency',
-          'dryeye': '13/13 Severe Dry Eye (Keratitis)'
+          'dryeye': '13/13 Severe Dry Eye (Keratitis)',
+          'stargardt': '13/13 Stargardt Disease'
         };
 
         this.nextMode = this.nextMode.bind(this);
         this.setMode = this.setMode.bind(this);
 
-        // Bind controller buttons for trigger cycling
+        // Bind VR controller trigger and face buttons to cycle conditions
         this.el.addEventListener('triggerdown', this.nextMode);
         this.el.addEventListener('selectstart', this.nextMode);
         this.el.addEventListener('abuttondown', this.nextMode);
@@ -652,6 +665,7 @@
       <option value="visualsnow">11. Visual Snow Syndrome</option>
       <option value="cvd">12. Color Vision Deficiency</option>
       <option value="dryeye">13. Severe Dry Eye (Keratitis)</option>
+      <option value="stargardt">13. Stargardt Disease</option>
     </select>
 
     <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
@@ -665,7 +679,7 @@
 
     <div class="pt-2 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
       <span>VR Controls:</span>
-      <span class="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">Left Stick: Walk / Right Stick: Snap Turn</span>
+      <span class="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">Stick UP: Walk / Right Stick: Snap Turn</span>
     </div>
   </div>
 
@@ -774,16 +788,16 @@
           <a-plane color="#0F172A" opacity="0.92" width="1.8" height="0.6" position="0 0 -0.01"></a-plane>
           <a-plane color="#2563EB" opacity="0.95" width="1.8" height="0.04" position="0 0.28 0"></a-plane>
           
-          <!-- Compact Condition Title Text -->
-          <a-text id="hud-text" value="Condition: 1/13 Normal Vision" 
+          <!-- Compact Condition Title Text (scale 1 1 1) -->
+          <a-text id="hud-text" value="Condition: 1/13 Normal Vision" scale="1 1 1"
                   align="center" width="1.2" color="#38BDF8" position="0 0.20 0.01"></a-text>
 
-          <!-- Compact Game Mode Text -->
-          <a-text id="game-mode-text" value="Mode: Free Explore (Idle)" 
+          <!-- Compact Game Mode Text (scale 0.65 0.65 0.65) -->
+          <a-text id="game-mode-text" value="Mode: Free Explore (Idle)" scale="0.65 0.65 0.65"
                   align="center" width="0.95" color="#E2E8F0" position="0 0.12 0.01"></a-text>
 
-          <!-- Compact Task Status Text -->
-          <a-text id="game-status-text" value="Free Exploration - Use joystick to navigate." 
+          <!-- Compact Task Status Text (scale 0.65 0.65 0.65) -->
+          <a-text id="game-status-text" value="Free Exploration - Use joystick to navigate." scale="0.65 0.65 0.65"
                   align="center" width="0.8" color="#94A3B8" position="0 0.05 0.01"></a-text>
 
           <!-- 3D Interactive Buttons Row -->
@@ -808,7 +822,7 @@
           </a-entity>
 
           <!-- Hint Footer -->
-          <a-text value="Left Stick/WASD: Walk | Right Stick: Snap Turn | Trigger: Filters" 
+          <a-text value="Left Stick UP: Walk Forward | Right Stick: Snap Turn | Trigger: Filters" scale="0.65 0.65 0.65"
                   align="center" width="0.75" color="#64748B" position="0 -0.22 0.01"></a-text>
         </a-entity>
       </a-camera>
