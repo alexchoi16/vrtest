@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -64,7 +64,6 @@
         if (!timeDelta) return;
         const dt = Math.min(timeDelta, 100) / 1000;
 
-        // Lazy fetch camera object
         if (!this.cameraObj) {
           const cameraEl = document.querySelector('a-camera');
           if (cameraEl) this.cameraObj = cameraEl.object3D;
@@ -72,26 +71,23 @@
 
         let needsRedraw = false;
 
-        // Option 4: Head Motion Dynamic Calculations
+        // Option 4: Head Motion Dynamic Physics
         if (this.cameraObj) {
           const currentRot = this.cameraObj.rotation;
           const rotDiffY = currentRot.y - this.lastRotation.y;
           const rotDiffX = currentRot.x - this.lastRotation.x;
 
-          // Velocity impulse from head pitch & yaw
           this.floaterVelX += rotDiffY * 2200;
           this.floaterVelY -= rotDiffX * 2200;
 
           this.lastRotation.copy(currentRot);
 
-          // Apply damping & spring tension return to center
           this.floaterVelX *= 0.91;
           this.floaterVelY *= 0.91;
 
           this.floaterPosX += this.floaterVelX * dt;
           this.floaterPosY += this.floaterVelY * dt;
 
-          // Soft spring attraction toward center (512, 512)
           this.floaterPosX += (512 - this.floaterPosX) * 1.5 * dt;
           this.floaterPosY += (512 - this.floaterPosY) * 1.5 * dt;
 
@@ -100,7 +96,7 @@
           }
         }
 
-        // Option 2: Calculate headlight brightness relative to camera view angle
+        // Option 2: Night Headlight Glare Photophobia
         const car1 = document.querySelector('#car1');
         const envComponent = document.querySelector('a-scene').components['environment'];
         const isNight = envComponent && envComponent.data.preset === 'night';
@@ -144,7 +140,7 @@
         const glare = this.glareIntensity;
 
         if (mode === 'amd') {
-          // Macular Degeneration (Central Scotoma)
+          // Macular Degeneration
           const grad = ctx.createRadialGradient(512, 512, 10, 512, 512, 280);
           grad.addColorStop(0, 'rgba(15, 12, 10, 0.98)');
           grad.addColorStop(0.6, 'rgba(35, 28, 20, 0.9)');
@@ -154,7 +150,7 @@
           ctx.arc(512, 512, 280, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'glaucoma') {
-          // Glaucoma (Peripheral Loss)
+          // Glaucoma
           ctx.fillStyle = 'rgba(5, 5, 5, 0.98)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -166,7 +162,7 @@
           ctx.arc(512, 512, 350, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'diabetic') {
-          // Diabetic Retinopathy (Inertial Floaters + Scotomas)
+          // Diabetic Retinopathy
           ctx.fillStyle = 'rgba(15, 10, 5, 0.88)';
           const spots = [
             [fx - 212, fy - 262, 75], [fx + 128, fy - 152, 95], 
@@ -179,7 +175,7 @@
             ctx.fill();
           });
         } else if (mode === 'cataract') {
-          // Cataracts (Clouded Vision + Enhanced Night Headlight Glare Haloes)
+          // Cataracts
           ctx.fillStyle = `rgba(195, 155, 75, ${0.42 + glare * 0.25})`;
           ctx.fillRect(0, 0, 1024, 1024);
 
@@ -194,7 +190,7 @@
             ctx.fill();
           }
         } else if (mode === 'keratoconus') {
-          // Keratoconus (Dynamic Ghosting & Streak Flare)
+          // Keratoconus
           const shiftX = (fx - 512) * 0.35;
           const shiftY = (fy - 512) * 0.35;
 
@@ -211,7 +207,6 @@
           });
 
           if (glare > 0) {
-            // Light flare streaks
             ctx.strokeStyle = `rgba(255, 255, 255, ${glare * 0.7})`;
             ctx.lineWidth = 14;
             ctx.beginPath();
@@ -237,7 +232,7 @@
           ctx.arc(512, 512, 460, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'rp') {
-          // Retinitis Pigmentosa (Extreme Tunnel Vision)
+          // Retinitis Pigmentosa
           ctx.fillStyle = 'rgba(5, 5, 5, 0.99)';
           ctx.fillRect(0, 0, 1024, 1024);
           ctx.globalCompositeOperation = 'destination-out';
@@ -249,7 +244,7 @@
           ctx.arc(512, 512, 150, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'cscr') {
-          // Central Serous Chorioretinopathy (Dynamic Center Distortion)
+          // CSCR
           const grad = ctx.createRadialGradient(fx, fy, 20, fx, fy, 190);
           grad.addColorStop(0, 'rgba(90, 100, 110, 0.72)');
           grad.addColorStop(0.85, 'rgba(150, 160, 170, 0.35)');
@@ -259,7 +254,7 @@
           ctx.arc(fx, fy, 190, 0, Math.PI * 2);
           ctx.fill();
         } else if (mode === 'uveitis') {
-          // Anterior Uveitis (Drifting Inflammatory Debris/Cells + Photophobia)
+          // Anterior Uveitis
           ctx.fillStyle = `rgba(255, 248, 225, ${0.35 + glare * 0.45})`;
           ctx.fillRect(0, 0, 1024, 1024);
 
@@ -362,7 +357,7 @@
           overlay.components['vision-overlay'].updateFilter(selected);
         }
         if (text) {
-          text.setAttribute('value', `Condition: ${this.labels[selected]}\n(Press Trigger or A/X to Cycle)`);
+          text.setAttribute('value', `Condition: ${this.labels[selected]}`);
         }
       }
     });
@@ -415,10 +410,18 @@
       }
     });
 
-    // Option 3: Time-of-Day Switcher Handler
+    // Time-of-Day Switcher function for 2D UI & VR 3D Buttons
     window.setEnvironmentPreset = function (presetName) {
       const envEl = document.querySelector('[environment]');
       const headLights = document.querySelectorAll('.headlight');
+      const clickSound = document.querySelector('#click-sound-entity');
+
+      if (clickSound && clickSound.components.sound) {
+        try {
+          clickSound.components.sound.stopSound();
+          clickSound.components.sound.playSound();
+        } catch(e) {}
+      }
 
       if (presetName === 'morning') {
         envEl.setAttribute('environment', {
@@ -440,18 +443,25 @@
         headLights.forEach(hl => hl.setAttribute('visible', 'true'));
       }
     };
+
+    // Helper for 3D HUD next mode button click
+    window.cycleVRMode = function () {
+      const modeSwitcherEl = document.querySelector('[mode-switcher]');
+      if (modeSwitcherEl && modeSwitcherEl.components['mode-switcher']) {
+        modeSwitcherEl.components['mode-switcher'].nextMode();
+      }
+    };
   </script>
 </head>
 <body class="bg-slate-900 text-slate-100 antialiased">
 
-  <!-- Interactive 2D UI Control Panel -->
+  <!-- Desktop 2D Overlay Control Panel -->
   <div class="fixed top-4 left-4 z-[9999] w-80 bg-white/95 backdrop-blur-md rounded-2xl p-5 shadow-2xl border border-white/20 text-slate-900 transition-all duration-300 hover:bg-white">
     <div class="flex items-center space-x-3 mb-3">
       <div class="w-3 h-3 rounded-full bg-blue-600 animate-pulse"></div>
       <h3 class="font-bold text-base tracking-tight text-blue-600">Vision Simulator VR</h3>
     </div>
     
-    <!-- Vision Condition Dropdown -->
     <label for="condition-select" class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
       1. Vision Condition
     </label>
@@ -470,9 +480,8 @@
       <option value="dryeye">12. Severe Dry Eye (Keratitis)</option>
     </select>
 
-    <!-- Option 3: Time of Day Selector -->
     <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-      2. Time of Day (Option 3)
+      2. Time of Day (2D & VR HUD)
     </label>
     <div class="grid grid-cols-3 gap-1.5 mb-3">
       <button onclick="setEnvironmentPreset('morning')" class="px-2 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 transition-all">Morning</button>
@@ -481,8 +490,8 @@
     </div>
 
     <div class="pt-3 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between">
-      <span>VR Controls:</span>
-      <span class="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">Trigger / A / X</span>
+      <span>VR HUD Controls:</span>
+      <span class="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">3D Buttons / Lasers</span>
     </div>
   </div>
 
@@ -493,30 +502,23 @@
       <audio id="ambient-sound" src="https://cdn.freesound.org/previews/416/416529_5121236-lq.mp3" crossorigin="anonymous"></audio>
     </a-assets>
 
-    <!-- Global Sound Effects -->
     <a-entity sound="src: #ambient-sound; autoplay: true; loop: true; volume: 0.3"></a-entity>
     <a-entity id="click-sound-entity" sound="src: #click-sound; autoplay: false; volume: 0.8"></a-entity>
 
-    <!-- Environment Preset Layer -->
     <a-entity environment="preset: forest; skyType: atmosphere; skyColor: #87CEEB; horizonColor: #E0F6FF; lightPosition: 0 1 0.5; dressingAmount: 55; playArea: 1.5; fog: 0.04"></a-entity>
     <a-entity light="type: ambient; color: #E0F2FE; intensity: 0.85"></a-entity>
     <a-entity light="type: directional; color: #FFFDF0; intensity: 1.25" position="-10 20 15"></a-entity>
 
-    <!-- Ground Surfaces with Layered Depth Offsets -->
     <a-entity id="ground-surfaces">
-      <!-- Asphalt Road -->
       <a-plane position="0 0.01 -10" rotation="-90 0 0" width="100" height="8" 
                material="color: #1E293B; roughness: 0.9; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Sidewalk -->
       <a-plane position="0 0.02 -6.5" rotation="-90 0 0" width="100" height="3" 
                material="color: #CBD5E1; roughness: 0.8; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Center Yellow Lane Markings -->
       <a-plane position="0 0.03 -10" rotation="-90 0 0" width="100" height="0.2" 
                material="color: #FAC815; depthTest: true; depthWrite: true"></a-plane>
 
-      <!-- Crosswalk White Stripes -->
       <a-entity position="0 0.04 -6.5">
         <a-plane position="-2 0 0" rotation="-90 0 0" width="0.6" height="2.8" material="color: #FFFFFF; depthTest: true; depthWrite: true"></a-plane>
         <a-plane position="-1 0 0" rotation="-90 0 0" width="0.6" height="2.8" material="color: #FFFFFF; depthTest: true; depthWrite: true"></a-plane>
@@ -526,7 +528,6 @@
       </a-entity>
     </a-entity>
 
-    <!-- Traffic Car 1 with Interactive Headlights (Option 2) -->
     <a-entity id="car1" position="30 0.6 -8.5"
               animation="property: position; to: -30 0.6 -8.5; loop: true; dur: 6000; easing: linear"
               sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.6; positional: true; distanceModel: linear; maxDistance: 40">
@@ -535,14 +536,12 @@
       <a-sphere position="-1.7 0.1 0.5" radius="0.15" color="#FEF08A"></a-sphere>
       <a-sphere position="-1.7 0.1 -0.5" radius="0.15" color="#FEF08A"></a-sphere>
 
-      <!-- Bright Headlight Beams for Night Glare Testing -->
       <a-entity class="headlight" visible="false" position="-1.8 0.1 0">
         <a-entity light="type: spot; color: #FFFDF0; intensity: 4.5; angle: 45; penumbra: 0.5" rotation="0 -90 0"></a-entity>
         <a-cone position="-2.5 0 0" rotation="0 0 -90" radius-bottom="1.2" radius-top="0.1" height="5" material="color: #FEF08A; opacity: 0.25; transparent: true"></a-cone>
       </a-entity>
     </a-entity>
 
-    <!-- Traffic Car 2 -->
     <a-entity id="car2" position="-30 0.6 -11.5"
               animation="property: position; to: 30 0.6 -11.5; loop: true; dur: 8000; easing: linear"
               sound="src: #engine-sound; autoplay: true; loop: true; volume: 0.5; positional: true; distanceModel: linear; maxDistance: 40">
@@ -557,7 +556,7 @@
       </a-entity>
     </a-entity>
 
-    <!-- Pedestrian 1: Adult Male -->
+    <!-- Pedestrian 1 -->
     <a-entity realistic-walker="speed: 1.1; direction: 1" position="-10 0 -6.2" rotation="0 90 0">
       <a-entity class="torso" position="0 1.15 0">
         <a-box width="0.38" height="0.55" depth="0.22" color="#1E3A8A"></a-box>
@@ -591,7 +590,7 @@
       </a-entity>
     </a-entity>
 
-    <!-- Pedestrian 2: Adult Female -->
+    <!-- Pedestrian 2 -->
     <a-entity realistic-walker="speed: 1.3; direction: -1" position="12 0 -6.8" rotation="0 -90 0">
       <a-entity class="torso" position="0 1.08 0">
         <a-box width="0.34" height="0.5" depth="0.2" color="#E11D48"></a-box>
@@ -622,7 +621,6 @@
       </a-entity>
     </a-entity>
 
-    <!-- Birds Overhead -->
     <a-entity position="0 12 -12" animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
       <a-entity position="6 0 0">
         <a-cone position="-0.3 0 0" rotation="0 0 70" radius-bottom="0.05" radius-top="0.01" height="0.8" color="#111"></a-cone>
@@ -630,25 +628,51 @@
       </a-entity>
     </a-entity>
 
-    <!-- Camera Rig & VR Overlay Mesh -->
     <a-entity id="rig" position="0 1.6 0">
-      <a-camera look-controls>
-        <!-- Canvas Overlay Plane for Vision Simulation -->
+      <a-camera look-controls cursor="rayOrigin: mouse">
+        <!-- Canvas Overlay Plane -->
         <a-plane id="overlay" vision-overlay position="0 0 -0.5" width="2" height="2" 
                  material="shader: flat; depthTest: false; depthWrite: false; transparent: true"></a-plane>
         
-        <!-- Modern 3D VR HUD Panel -->
-        <a-entity id="hud-panel" position="0 -0.65 -1.8">
-          <a-plane color="#FFFFFF" opacity="0.9" width="1.6" height="0.35" position="0 0 -0.01"></a-plane>
-          <a-plane color="#2563EB" opacity="0.95" width="1.6" height="0.03" position="0 0.165 0"></a-plane>
-          <a-text id="hud-text" value="Condition: 1/12 Normal Vision\n(Press Trigger or A/X to Cycle)" 
-                  align="center" width="1.8" color="#111111"></a-text>
+        <!-- Interactive 3D VR HUD Floating Panel -->
+        <a-entity id="hud-panel" position="0 -0.55 -1.5">
+          <!-- Background Panel Plane -->
+          <a-plane color="#FFFFFF" opacity="0.95" width="1.7" height="0.45" position="0 0 -0.01"></a-plane>
+          <a-plane color="#2563EB" opacity="0.95" width="1.7" height="0.04" position="0 0.205 0"></a-plane>
+          
+          <!-- Condition Status Text -->
+          <a-text id="hud-text" value="Condition: 1/12 Normal Vision" 
+                  align="center" width="1.9" color="#0F172A" position="0 0.12 0.01"></a-text>
+
+          <!-- VR Interactive 3D Buttons Layer -->
+          <!-- 1. Next Condition 3D Button -->
+          <a-plane class="raycastable" onclick="cycleVRMode()" position="-0.48 -0.04 0.02" width="0.65" height="0.12" color="#2563EB">
+            <a-text value="Cycle Condition" align="center" width="1.5" color="#FFFFFF" position="0 0 0.01"></a-text>
+          </a-plane>
+
+          <!-- 2. Time of Day VR 3D Buttons (Day / Dusk / Night) -->
+          <a-entity position="0.38 -0.04 0.02">
+            <!-- Morning/Day Button -->
+            <a-plane class="raycastable" onclick="setEnvironmentPreset('morning')" position="-0.26 0 0" width="0.22" height="0.12" color="#3B82F6">
+              <a-text value="Day" align="center" width="1.5" color="#FFFFFF" position="0 0 0.01"></a-text>
+            </a-plane>
+            <!-- Dusk Button -->
+            <a-plane class="raycastable" onclick="setEnvironmentPreset('dusk')" position="0 0 0" width="0.22" height="0.12" color="#F59E0B">
+              <a-text value="Dusk" align="center" width="1.5" color="#FFFFFF" position="0 0 0.01"></a-text>
+            </a-plane>
+            <!-- Night Button -->
+            <a-plane class="raycastable" onclick="setEnvironmentPreset('night')" position="0.26 0 0" width="0.22" height="0.12" color="#1E293B">
+              <a-text value="Night" align="center" width="1.5" color="#FFFFFF" position="0 0 0.01"></a-text>
+            </a-plane>
+          </a-entity>
+
+          <!-- Subtext hint -->
+          <a-text value="Point laser & trigger to select in VR" align="center" width="1.2" color="#64748B" position="0 -0.16 0.01"></a-text>
         </a-entity>
       </a-camera>
 
-      <!-- VR Touch Controllers -->
-      <a-entity mode-switcher oculus-touch-controls="hand: right"></a-entity>
-      <a-entity mode-switcher oculus-touch-controls="hand: left"></a-entity>
+      <a-entity mode-switcher laser-controls="hand: right" raycaster="objects: .raycastable; far: 5"></a-entity>
+      <a-entity mode-switcher laser-controls="hand: left" raycaster="objects: .raycastable; far: 5"></a-entity>
     </a-entity>
   </a-scene>
 </body>
